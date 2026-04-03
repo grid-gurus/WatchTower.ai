@@ -522,7 +522,7 @@ async def background_alert_daemon():
         finally:
             db.close()
                 
-        await asyncio.sleep(12)d
+        await asyncio.sleep(12)
 
 @app.on_event("startup")
 async def startup_event():

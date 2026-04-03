@@ -222,4 +222,35 @@ watchtower.db
 data/
 backend/data/
 
+# Temporary Test & Refactoring Files
+check_db.py
+check_db_v2.py
+check_db_v3.py
+create_test_video.py
+final_diff.txt
+inspect_db.py
+logs.txt
+main_diff.txt
+pipeline_diff.txt
+st_main.py
+st_main_utf8.py
+st_pipelineY.py
+st_pipelineY_utf8.py
+sumedh_main.py
+sumedh_pipelineY.py
+test_pipeline_fix.py
+test_results.txt
+test_telegram.py
+test_upload.mp4
+tmp_main_ST.py
+tmp_pipelineY_ST.py
+verify_system.py
+verify_fix.py
+test_models.py
+migrate_db.py
+API_VERIFICATION_REPORT.md
+API_TESTS.md
+curl_tests.ps1
+curl_tests.sh
+
 
