@@ -60,6 +60,7 @@ class UserResponse(BaseModel):
     full_name: Optional[str] = None
     phone: Optional[str] = None
     telegram_handle: Optional[str] = None
+    profile_picture: Optional[str] = None
     created_at: datetime
     is_active: bool
 

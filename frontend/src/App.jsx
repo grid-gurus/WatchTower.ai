@@ -8,6 +8,7 @@ import Signup from "./pages/Signup";
 import UploadDropzone from "./components/UploadDropZone";
 import MyProfile from "./pages/MyProfile";
 import CreateAlert from "./pages/CreateAlert";
+import LiveStream from "./pages/LiveStream";
 import Toast from "./components/Toast";
 
 export default function App() {
@@ -26,6 +27,7 @@ export default function App() {
         <Route path="/uploaddropzone" element={<UploadDropzone />} />
         <Route path="/me" element={<MyProfile />} />
         <Route path="/alerts/create" element={<CreateAlert />} />
+        <Route path="/livestream" element={<LiveStream />} />
 
       </Routes>
     </div>

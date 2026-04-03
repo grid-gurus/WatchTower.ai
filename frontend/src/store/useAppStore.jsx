@@ -43,8 +43,14 @@ const useAppStore = create((set) => ({
       currentFrameTime: time,
     }),
 
-  // ⛔ Stop playback
+  // 🎬 Stop playback loop (but keep the frame visible)
   stopClip: () =>
+    set({
+      isEventPlaying: false,
+    }),
+
+  // 🗑️ Clear everything (triggered by 'Remove' button)
+  clearResult: () =>
     set({
       clipStart: null,
       clipEnd: null,

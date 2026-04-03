@@ -10,6 +10,7 @@ export default function FramePlayer() {
         setCurrentFrame,
         isEventPlaying,
         stopClip,
+        clearResult,
     } = useAppStore();
 
     // 🎬 Frame playback loop
@@ -52,13 +53,23 @@ export default function FramePlayer() {
                     </div>
                 )}
 
-                {/* ❌ Exit Event Button */}
+                {/* 🗑️ Remove Result Button */}
+                {!isEventPlaying && (
+                    <button
+                        onClick={clearResult}
+                        className="absolute top-3 right-3 px-3 py-1 text-xs rounded-lg bg-black/70 border border-white/20 hover:border-red-400 transition flex items-center gap-2"
+                    >
+                        <span>✖</span> Remove Results
+                    </button>
+                )}
+
+                {/* ❌ Exit Event Button (During Playback) */}
                 {isEventPlaying && (
                     <button
                         onClick={stopClip}
                         className="absolute top-3 right-3 px-3 py-1 text-xs rounded-lg bg-black/70 border border-white/20 hover:border-red-400 transition"
                     >
-                        Exit Event
+                        Stop Playback
                     </button>
                 )}
 

@@ -1,6 +1,7 @@
 import cv2
 import torch
 import os
+import shutil
 
 # FIX: Allow OpenCV/FFmpeg to connect to local IP cameras using self-signed HTTPS certificates
 os.environ["OPENCV_FFMPEG_CAPTURE_OPTIONS"] = "tls_verify;0"
@@ -9,6 +10,9 @@ from PIL import Image
 import open_clip
 from google import genai
 import concurrent.futures
+import queue
+import threading
+import uuid
 
 class OfflineVideoPipeline:
     def __init__(self, api_key, collection_name="cctv_main_stream"):
@@ -24,50 +28,124 @@ class OfflineVideoPipeline:
         self.vlm_client = genai.Client(api_key=api_key)
         self.vlm_model_name = "gemini-2.5-flash-lite" # Use stable flash model for 1500 RPM quota
         self.io_pool = concurrent.futures.ThreadPoolExecutor(max_workers=8)
+        
+        self.ai_queue = queue.Queue(maxsize=128)
+        self.worker_thread = threading.Thread(target=self._ai_worker, daemon=True)
+        self.worker_thread.start()
 
-    def ingest_video(self, video_path, source_id, fps_to_extract=1, batch_size=64):
+    def _ai_worker(self):
+        """ Background thread that crunches numbers cleanly separating streams and uploaded videos. """
+        batches = {} # Use dicts to isolate frames by collection_name
+
+        while True:
+            try:
+                task = self.ai_queue.get()
+                if task is None: break 
+
+                # --- FLUSH SIGNAL HANDLING ---
+                if isinstance(task, tuple) and len(task) >= 4 and task[0] == "FLUSH":
+                    source_id = task[1]
+                    collection_name = task[2]
+
+                    if collection_name in batches and batches[collection_name]["images"]:
+                        b = batches[collection_name]
+                        print(f"✅ [AI Worker] Flushing final batch ({len(b['images'])} frames) for {source_id} in {collection_name}")
+                        self._store_batch(b["images"], b["metadatas"], b["ids"], collection_name)
+                        # Reset
+                        batches[collection_name] = {"images": [], "metadatas": [], "ids": []}
+                    continue
+
+                pil_img, metadata, source_id, timestamp, collection_name = task
+
+                # Initialize batch dictionary if missing for this specific context
+                if collection_name not in batches:
+                    batches[collection_name] = {"images": [], "metadatas": [], "ids": []}
+
+                b = batches[collection_name]
+                b["images"].append(pil_img)
+                b["metadatas"].append(metadata)
+                b["ids"].append(f"{source_id}_{timestamp:.2f}")
+
+                if len(b["images"]) >= 32: 
+                    self._store_batch(b["images"], b["metadatas"], b["ids"], collection_name)
+                    batches[collection_name] = {"images": [], "metadatas": [], "ids": []}
+
+            except Exception as e:
+                print(f"❌ [AI Worker] ERROR: {e}")
+            finally:
+                self.ai_queue.task_done()
+    def ingest_video(self, video_path, source_id, collection_name="cctv_main_stream", fps_to_extract=1, batch_size=64, on_frame=None):
         """Extracts frames, gets embeddings, and saves to VectorDB."""
-        os.makedirs(f"./data/frames/{source_id}", exist_ok=True)
+        frames_dir = f"./data/frames/{source_id}"
+        if os.path.exists(frames_dir):
+            print(f"🧹 [Fresh Start] Cleaning out old frames in: {frames_dir}")
+            shutil.rmtree(frames_dir)
+        os.makedirs(frames_dir, exist_ok=True)
+
+        try:
+            print(f"🧹 [Fresh Start] Purging old VectorDB metadata for {source_id} in {collection_name}")
+            col = self.chroma_client.get_or_create_collection(name=collection_name)
+            col.delete(where={"source_id": source_id})
+        except Exception as e:
+            pass
+
         cap = cv2.VideoCapture(video_path)
+        
+        if not cap.isOpened():
+            print(f"❌ [ML Engine] ERROR: Could not open video source: {video_path}")
+            return
+            
+        print(f"✅ [ML Engine] Successfully connected to source: {source_id}")
         fps = round(cap.get(cv2.CAP_PROP_FPS))
+        if fps <= 0: fps = 25 
         frame_interval = max(1, int(fps / fps_to_extract))
         
         count = 0
-        batch_images, batch_metadatas, batch_ids = [], [],[]
 
         while cap.isOpened():
             ret, frame = cap.read()
             if not ret: break
             
+            if on_frame:
+                on_frame(frame)
+            
             if count % frame_interval == 0:
                 timestamp = count / fps
-                rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-                pil_img = Image.fromarray(rgb_frame)
-                
                 frame_path = f"./data/frames/{source_id}/t_{timestamp:.1f}.jpg"
-                # SAVING SYNCHRONOUSLY: Ensures the file is on disk before the database knows it exists.
-                # Avoids race conditions in the background daemon!
-                pil_img.save(frame_path)
+                metadata = {"source_id": source_id, "timestamp": timestamp, "frame_path": frame_path}
                 
-                batch_images.append(pil_img)
-                batch_metadatas.append({"source_id": source_id, "timestamp": timestamp, "frame_path": frame_path})
-                batch_ids.append(f"{source_id}_{timestamp}")
+                try:
+                    # --- CRITICAL FIX: Save frame SYNCHRONOUSLY to ensure disk exists ---
+                    rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+                    pil_img = Image.fromarray(rgb_frame)
+                    pil_img.save(frame_path)
+                    
+                    # Push PIL image to background worker for CLIP analysis
+                    self.ai_queue.put_nowait((pil_img, metadata, source_id, timestamp, collection_name))
+                except Exception as e:
+                    print(f"⚠️ [Ingestion] Skipped frame for {source_id}: {e}")
                 
-                if len(batch_images) == batch_size:
-                    self._store_batch(batch_images, batch_metadatas, batch_ids)
-                    batch_images, batch_metadatas, batch_ids = [], [],[]
             count += 1
         cap.release()
         
-        if batch_images:
-            self._store_batch(batch_images, batch_metadatas, batch_ids)
+        print(f"🏁 [ML Engine] Ingestion finished reading for {source_id}. Waiting for AI Worker...")
+        self.ai_queue.put(("FLUSH", source_id, collection_name, True))
+        self.ai_queue.join()
+        print(f"✅ [ML Engine] AI processing completed for {source_id}.")
 
-    def _store_batch(self, images, metadatas, ids):
+    def _store_batch(self, images, metadatas, ids, collection_name):
         tensors = torch.stack([self.preprocess(img) for img in images]).to(self.device)
         with torch.no_grad():
             features = self.model.encode_image(tensors)
             features /= features.norm(dim=-1, keepdim=True)
-        self.collection.add(embeddings=features.cpu().tolist(), metadatas=metadatas, ids=ids)
+            
+        col = self.chroma_client.get_or_create_collection(name=collection_name)
+        col.add(embeddings=features.cpu().tolist(), metadatas=metadatas, ids=ids)
+        print(f"💾 [ML Engine] Successfully stored batch of {len(images)} frames in {collection_name}. Total count: {col.count()}")
+
+    def query(self, text_query, top_k=5, source_id=None, collection_name=None, is_stream=False):
+        if collection_name is None:
+            collection_name = "live_cctv_stream" if is_stream else "uploaded_vault"
 
     def find_suspect_by_image(self, suspect_image_path, top_k=5, min_timestamp=None, text_query=None):
         """
@@ -178,8 +256,6 @@ class OfflineVideoPipeline:
         if not results['ids'] or not results['ids'][0]:
             return {"status": "error", "message": "No matches found."}
 
-        # Filter frames to only include those that actually exist on disk!
-        # This prevents the frontend from getting 404s for "Ghost Matches"
         raw_frames = results['metadatas'][0]
         valid_frames = []
         vlm_content =[f"Query: '{text_query}'. You are a Quick Search Assistant. Analyze these frames and confirm if the target is present. Provide a professional 2-line summary of what you see. Mention the primary frame of detection clearly."]
@@ -191,11 +267,9 @@ class OfflineVideoPipeline:
             else:
                 print(f"  -> Ignoring stale metadata (file missing): {m['frame_path']}")
         
-        # If no frames could be found at all, stop here.
         if not valid_frames:
             return {"status": "error", "message": "No valid image frames found on disk for this query."}
         
-        # If no frames could be opened, don't waste an API call
         if len(vlm_content) <= 1:
             return {"status": "error", "message": "No valid image frames found on disk."}
 

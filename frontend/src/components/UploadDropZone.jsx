@@ -98,7 +98,7 @@ export default function UploadDropzone() {
     };
 
     return (
-        <div className="w-full h-full flex items-center justify-center p-6 pt-30 bg-gradient-to-br from-black via-zinc-900 to-black text-white overflow-hidden relative">
+        <div className="w-full h-full flex items-center justify-center p-6 pt-10 bg-gradient-to-br from-black via-zinc-900 to-black text-white overflow-hidden relative">
             {/* Glow */}
             <div className="absolute top-[-80px] left-[-80px] w-64 h-64 bg-cyan-500/15 rounded-full blur-3xl pointer-events-none"></div>
             <div className="absolute bottom-[-80px] right-[-80px] w-64 h-64 bg-purple-500/15 rounded-full blur-3xl pointer-events-none"></div>
