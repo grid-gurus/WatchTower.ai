@@ -6,7 +6,18 @@ import os
 import sys
 import asyncio
 import requests
+import threading
+import pyttsx3
 from sqlalchemy.orm import Session
+
+def speak_alarm(text_to_speak: str):
+    """ Cross-platform background worker to run audio on Mac, Windows, and Linux safely. """
+    try:
+        engine = pyttsx3.init()
+        engine.say(text_to_speak)
+        engine.runAndWait()
+    except Exception as e:
+        print(f"Audio disabled or TTS crashed: {e}")
 
 # =====================================================================
 # 1. SETUP & ALIGNMENT WITH ML TEAMMATE
