@@ -26,7 +26,7 @@ class OfflineVideoPipeline:
         self.collection = self.chroma_client.get_or_create_collection(name=collection_name)
         
         self.vlm_client = genai.Client(api_key=api_key)
-        self.vlm_model_name = "gemini-2.5-flash-lite" # Use stable flash model for 1500 RPM quota
+        self.vlm_model_name = "gemini-2.5-flash" # Use stable flash model for 1500 RPM quota
         self.io_pool = concurrent.futures.ThreadPoolExecutor(max_workers=8)
         
         self.ai_queue = queue.Queue(maxsize=128)
@@ -235,19 +235,28 @@ class OfflineVideoPipeline:
             "all_matches": valid_frames
         }
 
-    def query(self, text_query, top_k=5, min_timestamp=None):
+    def query(self, text_query, top_k=5, min_timestamp=None, source_id=None, is_stream=False, collection_name=None):
         """Searches the VectorDB and asks the VLM to verify."""
+        if collection_name is None:
+            collection_name = "live_cctv_stream" if is_stream else "uploaded_vault"
+            
         text_input = self.tokenizer([text_query]).to(self.device)
         with torch.no_grad():
             features = self.model.encode_text(text_input)
             features /= features.norm(dim=-1, keepdim=True)
             
-        # adding a filter by time so we don't spam old alerts
-        where_filter = None
+        # adding a filter by time and source
+        where_filter = {}
         if min_timestamp is not None:
-            where_filter = {"timestamp": {"$gte": min_timestamp}}
+            where_filter["timestamp"] = {"$gte": min_timestamp}
+        if source_id is not None:
+            where_filter["source_id"] = source_id
+            
+        if not where_filter:
+            where_filter = None
 
-        results = self.collection.query(
+        col = self.chroma_client.get_or_create_collection(name=collection_name)
+        results = col.query(
             query_embeddings=[features.cpu().tolist()[0]], 
             n_results=top_k,
             where=where_filter 
