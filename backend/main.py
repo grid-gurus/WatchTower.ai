@@ -1,5 +1,6 @@
-from fastapi import FastAPI, UploadFile, File, BackgroundTasks, Depends, HTTPException
 from fastapi.staticfiles import StaticFiles
+from fastapi import FastAPI, UploadFile, File, BackgroundTasks, Depends, HTTPException, Cookie, Response, WebSocket, WebSocketDisconnect
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 import shutil
 import os
@@ -7,17 +8,20 @@ import sys
 import asyncio
 import requests
 import threading
-import pyttsx3
 from sqlalchemy.orm import Session
+from typing import Optional
 
-def speak_alarm(text_to_speak: str):
-    """ Cross-platform background worker to run audio on Mac, Windows, and Linux safely. """
-    try:
-        engine = pyttsx3.init()
-        engine.say(text_to_speak)
-        engine.runAndWait()
-    except Exception as e:
-        print(f"Audio disabled or TTS crashed: {e}")
+# Import authentication utilities
+from backend.auth import (
+    hash_password, 
+    verify_password, 
+    create_tokens,
+    verify_token,
+    get_user_id_from_token,
+    UserResponse,
+    TokenResponse,
+    TokenRequest
+)
 
 # =====================================================================
 # 1. SETUP & ALIGNMENT WITH ML TEAMMATE
@@ -31,8 +35,6 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from model.pipelineY import OfflineVideoPipeline
 
 from fastapi.middleware.cors import CORSMiddleware
-
-from fastapi import WebSocket, WebSocketDisconnect
 
 # =====================================================================
 # WEBSOCKET MANAGER
@@ -58,8 +60,15 @@ class ConnectionManager:
 # Create a global instance of the manager
 notifier = ConnectionManager()
 
+
+# Ensure the 'data' directory exists so StaticFiles doesn't crash on startup!
+os.makedirs("data", exist_ok=True)
+os.makedirs("data/frames", exist_ok=True)
+
 # Initialize the FastAPI App!
 app = FastAPI(title="WatchTower.ai Backend")
+
+app.mount("/data", StaticFiles(directory="data"), name="data")
 
 # Allow Frontend to communicate with Backend (Avoid CORS errors)
 app.add_middleware(
@@ -70,22 +79,24 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-#  Serve the /data folder so the React Frontend can 
-# actually see the images Gemini analyzes! 
-# Without this, the frontend will get 404 errors.
-app.mount("/data", StaticFiles(directory="data"), name="data")
-
 # Initialize the ML Engine from your teammate's code.
 import os
 import dotenv
 
-# Load the secret variables from the .env file (exactly like MERN stack's 'dotenv' package!)
-dotenv.load_dotenv()
+# Load the secret variables from the .env file!
+# Since main.py is in the 'backend' folder, we look for the .env one level up in the root.
+base_dir = os.path.dirname(os.path.abspath(__file__))
+env_path = os.path.join(os.path.dirname(base_dir), ".env")
+dotenv.load_dotenv(env_path)
 
 # Securely grab the API Key from the .env file!
 api_key = os.getenv("GEMINI_API_KEY")
+
 if not api_key:
-    print("CRITICAL ERROR: GEMINI_API_KEY is completely missing from your .env file!")
+    print("❌ CRITICAL ERROR: GEMINI_API_KEY could not be loaded! Check your .env file in the root.")
+else:
+    # We only print the first/last characters for security, but enough to know it's there!
+    print(f"✅ [Backend] GEMINI_API_KEY loaded successfully. (Starts with: {api_key[:4]}...)")
 
 TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
 TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")
@@ -132,8 +143,47 @@ def get_db():
     finally:
         db.close()
 
+
+# =====================================================================
+# AUTHENTICATION DEPENDENCY
+# =====================================================================
+def get_current_user(
+    request_authorization: Optional[str] = None,
+    db: Session = Depends(get_db)
+) -> models.User:
+    """
+    Extract and verify JWT token from Authorization header or cookies.
+    Returns the current authenticated user.
+    """
+    token = None
+    
+    # Try to get token from Authorization header (Bearer token)
+    if request_authorization and request_authorization.startswith("Bearer "):
+        token = request_authorization[7:]
+    
+    if not token:
+        raise HTTPException(status_code=401, detail="No valid token provided")
+    
+    try:
+        payload = verify_token(token)
+        user_id: int = payload.get("user_id")
+        email: str = payload.get("email")
+        
+        if user_id is None or email is None:
+            raise HTTPException(status_code=401, detail="Invalid token")
+        
+        # Get user from database
+        user = db.query(models.User).filter(models.User.id == user_id).first()
+        if not user or not user.is_active:
+            raise HTTPException(status_code=401, detail="User not found or inactive")
+        
+        return user
+    except Exception as e:
+        raise HTTPException(status_code=401, detail=f"Invalid token: {str(e)}")
+
+
 # Tracker for background video ingestion
-video_processing_status = {"cctv_main": "idle"}
+video_processing_status = {}
 
 
 # =====================================================================
@@ -143,29 +193,43 @@ class UserLogin(BaseModel):
     email: str
     password: str
 
+
 class UserSignup(BaseModel):
     email: str
     password: str
+    full_name: str = None
+    phone: str = None
     telegram_handle: str = None
+
+
+class UserProfileUpdate(BaseModel):
+    full_name: Optional[str] = None
+    phone: Optional[str] = None
+    telegram_handle: Optional[str] = None
+
 
 class AlertRule(BaseModel):
     condition: str
 
+
 from typing import List
+
 
 class StreamConfig(BaseModel):
     stream_url: str
     source_name: str = "cam_1"
 
+
 class LivestreamRequest(BaseModel):
     streams: List[StreamConfig]
+
 
 class QueryRequest(BaseModel):
     query: str
 
 
 # =====================================================================
-# 4. API ENDPOINTS (The core of your Backend job)
+# 4. API ENDPOINTS - AUTHENTICATION (The core of your Backend job)
 # =====================================================================
 
 # websocket end point setup
@@ -184,37 +248,223 @@ async def websocket_alerts(websocket: WebSocket):
     except WebSocketDisconnect:
         notifier.disconnect(websocket)
 
-@app.post("/api/auth/signup")
+@app.post("/api/auth/signup", response_model=TokenResponse)
 async def signup(user: UserSignup, db: Session = Depends(get_db)):
     """
-    Creates a new user in the Watchtower.ai SQLite Database.
+    Creates a new user in the Watchtower.ai SQLite Database with bcrypt password hashing.
+    Returns JWT tokens and sets them in secure HTTP-only cookies.
     """
-    # Quick mock hash for the hackathon (normally use python-bcrypt)
-    fake_hashed_pw = user.password + "_hashed!"
+    # Check if user already exists
+    existing_user = db.query(models.User).filter(models.User.email == user.email).first()
+    if existing_user:
+        raise HTTPException(status_code=400, detail="Email already registered")
     
+    # Hash the password using bcrypt
+    hashed_password = hash_password(user.password)
+    
+    # Create new user
     db_user = models.User(
         email=user.email,
-        hashed_password=fake_hashed_pw,
-        telegram_handle=user.telegram_handle
+        hashed_password=hashed_password,
+        full_name=user.full_name,
+        phone=user.phone,
+        telegram_handle=user.telegram_handle,
+        is_active=True
     )
     db.add(db_user)
     db.commit()
     db.refresh(db_user)
-    return {"status": "success", "message": f"User '{user.email}' registered successfully!", "id": db_user.id}
+    
+    # Generate JWT tokens
+    tokens = create_tokens(db_user.id, db_user.email)
+    
+    return tokens
 
-@app.post("/api/auth/login")
-async def login(user: UserLogin):
+
+@app.post("/api/auth/login", response_model=TokenResponse)
+async def login(user: UserLogin, response: Response, db: Session = Depends(get_db)):
     """
-    Returns a dummy session token. 
-    In the future, this will check passwords and generate a JWT.
+    Authenticates user with email and password.
+    Verifies password using bcrypt.
+    Returns JWT tokens and sets them in secure HTTP-only cookies.
     """
-    return {"token": "fake_session_token", "user": user.email}
+    # Find user by email
+    db_user = db.query(models.User).filter(models.User.email == user.email).first()
+    if not db_user or not db_user.is_active:
+        raise HTTPException(status_code=401, detail="Invalid email or password")
+    
+    # Verify password using bcrypt
+    if not verify_password(user.password, db_user.hashed_password):
+        raise HTTPException(status_code=401, detail="Invalid email or password")
+    
+    # Generate JWT tokens
+    tokens = create_tokens(db_user.id, db_user.email)
+    
+    # Set tokens in HTTP-only cookies for secure storage
+    response.set_cookie(
+        key="access_token",
+        value=tokens.access_token,
+        httponly=True,
+        secure=False,  # Set to True in production with HTTPS
+        samesite="lax",
+        max_age=60 * 60 * 24  # 24 hours
+    )
+    response.set_cookie(
+        key="refresh_token",
+        value=tokens.refresh_token,
+        httponly=True,
+        secure=False,  # Set to True in production with HTTPS
+        samesite="lax",
+        max_age=60 * 60 * 24 * 7  # 7 days
+    )
+    
+    return tokens
+
+
+@app.get("/api/auth/profile", response_model=UserResponse)
+async def get_profile(
+    authorization: Optional[str] = None,
+    db: Session = Depends(get_db)
+):
+    """
+    Returns the current user's full profile with real data.
+    Requires valid JWT token.
+    """
+    # Get current user from token
+    current_user = get_current_user(request_authorization=authorization, db=db)
+    
+    return UserResponse(
+        id=current_user.id,
+        email=current_user.email,
+        full_name=current_user.full_name,
+        phone=current_user.phone,
+        telegram_handle=current_user.telegram_handle,
+        created_at=current_user.created_at,
+        is_active=current_user.is_active
+    )
+
+
+@app.put("/api/auth/profile", response_model=UserResponse)
+async def update_profile(
+    profile_update: UserProfileUpdate,
+    authorization: Optional[str] = None,
+    db: Session = Depends(get_db)
+):
+    """
+    Updates the current user's profile information.
+    Requires valid JWT token.
+    """
+    # Get current user
+    current_user = get_current_user(request_authorization=authorization, db=db)
+    
+    # Update fields if provided
+    if profile_update.full_name is not None:
+        current_user.full_name = profile_update.full_name
+    if profile_update.phone is not None:
+        current_user.phone = profile_update.phone
+    if profile_update.telegram_handle is not None:
+        current_user.telegram_handle = profile_update.telegram_handle
+    
+    db.commit()
+    db.refresh(current_user)
+    
+    return UserResponse(
+        id=current_user.id,
+        email=current_user.email,
+        full_name=current_user.full_name,
+        phone=current_user.phone,
+        telegram_handle=current_user.telegram_handle,
+        created_at=current_user.created_at,
+        is_active=current_user.is_active
+    )
+
+
+@app.post("/api/auth/logout")
+async def logout(response: Response):
+    """
+    Logs out the user by clearing JWT cookies.
+    """
+    response.delete_cookie(key="access_token")
+    response.delete_cookie(key="refresh_token")
+    
+    return JSONResponse(
+        status_code=200,
+        content={"status": "success", "message": "Logged out successfully"}
+    )
+
+
+@app.post("/api/auth/refresh", response_model=TokenResponse)
+async def refresh_token(req: TokenRequest, db: Session = Depends(get_db)):
+    """
+    Refreshes JWT tokens using a valid refresh token.
+    Returns new access and refresh tokens.
+    """
+    try:
+        payload = verify_token(req.refresh_token)
+        user_id: int = payload.get("user_id")
+        email: str = payload.get("email")
+        
+        if user_id is None or email is None:
+            raise HTTPException(status_code=401, detail="Invalid refresh token")
+        
+        # Verify user still exists and is active
+        user = db.query(models.User).filter(models.User.id == user_id).first()
+        if not user or not user.is_active:
+            raise HTTPException(status_code=401, detail="User not found or inactive")
+        
+        # Generate new tokens
+        tokens = create_tokens(user.id, user.email)
+        return tokens
+    except Exception as e:
+        raise HTTPException(status_code=401, detail=f"Invalid refresh token: {str(e)}")
+
+
+@app.get("/api/auth/verify")
+async def verify_auth(authorization: Optional[str] = None, db: Session = Depends(get_db)):
+    """
+    Verifies if the provided JWT token is valid.
+    Returns user info if valid.
+    """
+    try:
+        user = get_current_user(request_authorization=authorization, db=db)
+        return {
+            "status": "valid",
+            "user_id": user.id,
+            "email": user.email,
+            "full_name": user.full_name
+        }
+    except HTTPException as e:
+        return {
+            "status": "invalid",
+            "detail": e.detail
+        }
+
+
+# =====================================================================
+# 5. API ENDPOINTS - MEDIA & ALERTS
+# =====================================================================
 
 
 @app.get("/api/media/status")
 async def check_processing_status():
-    """ Returns the status of the video ingestion. """
-    return {"status": video_processing_status.get("cctv_main", "idle")}
+    """ Returns the overall status of all video processing tasks. """
+    if not video_processing_status:
+        return {"status": "idle"}
+
+    statuses = list(video_processing_status.values())
+
+    if "processing" in statuses:
+        return {"status": "processing"}
+    elif "completed" in statuses:
+        return {"status": "completed"}
+
+    for s in statuses:
+        if isinstance(s, str) and s.startswith("error"):
+            return {"status": "error"}
+
+    return {"status": "idle"}
+
+
 
 def process_video_task(file_path: str, source_id: str):
     """ Wrapped background task to update our dummy DB state """
@@ -267,7 +517,10 @@ async def upload_video(background_tasks: BackgroundTasks, file: UploadFile = Fil
         shutil.copyfileobj(file.file, buffer)
         
     # Trigger the ML processing behind the scenes!
-    background_tasks.add_task(process_video_task, file_path, "cctv_main")
+    # Extract video name without extension → acts as unique source_id
+    video_title = os.path.splitext(file.filename)[0]
+
+    background_tasks.add_task(process_video_task, file_path, video_title)
         
     return {"status": "processing", "message": f"Video successfully saved to {file_path}. Processing has started."}
 
@@ -428,7 +681,6 @@ async def background_alert_daemon():
         # Wait 30 seconds before doing it all again
         await asyncio.sleep(30)
 
-
 @app.on_event("startup")
 async def startup_event():
     """
@@ -437,3 +689,15 @@ async def startup_event():
     """
     asyncio.create_task(background_alert_daemon())
 
+
+def speak_alarm(phrase: str):
+    """
+    Text-to-speech alarm using pyttsx3 (cross-platform: Windows, Mac, Linux)
+    """
+    try:
+        import pyttsx3
+        engine = pyttsx3.init()
+        engine.say(phrase)
+        engine.runAndWait()
+    except Exception as e:
+        print(f"TTS Error: {e}")

@@ -1,39 +1,38 @@
 import { useState, useEffect } from "react";
 import Navbar from "../components/Navbar";
 import TripwireTable from "../components/TripWireTable";
+import useToastStore from "../store/useToastStore"; // 🔥 Use Global Toasts!
 
 export default function TripWires() {
   const [input, setInput] = useState("");
   const [alerts, setAlerts] = useState([]);
-  const [message, setMessage] = useState(null); // 🔥 for popup message
 
   const telegramHandle = "@your_handle"; // later from backend
+  const { addToast } = useToastStore(); // 🔥 Access Global Toast System
   
-  // 🔌 Establish Live WebSocket Connection
+  // 🔌 WEBSOCKET CONNECTION: Listen for live AI alerts from the backend
   useEffect(() => {
+    console.log("Connecting to WatchTower WebSocket...");
     const socket = new WebSocket("ws://127.0.0.1:8000/ws/alerts");
 
     socket.onmessage = (event) => {
-      try {
-        const data = JSON.parse(event.data);
-        if (data.type === "NEW_ALERT") {
-          // 🎉 Trigger the toast notification pop-up
-          setMessage({ 
-            type: "success", 
-            text: `🚨 AI ALERT: ${data.rule} - ${data.ai_analysis.substring(0, 50)}...` 
-          });
-          
-          // Auto-hide toast after 5 seconds
-          setTimeout(() => setMessage(null), 5000);
-        }
-      } catch (err) {
-        console.error("WebSocket message error:", err);
+      const data = JSON.parse(event.data);
+      console.log("AI Alert Received via WebSocket:", data);
+
+      if (data.type === "NEW_ALERT") {
+        // 🎉 Show the Professional Global Toast
+        addToast(
+          `🚨 AI ALERT: ${data.rule} - ${data.ai_analysis}`, 
+          "success", 
+          8000
+        );
       }
     };
 
-    socket.onclose = () => console.log("WebSocket Disconnected. Reconnect on refresh.");
-    
-    return () => socket.close(); // Clean up on page leave
+    socket.onerror = (error) => console.error("WebSocket Error:", error);
+    socket.onclose = () => console.log("WebSocket Connection Closed.");
+
+    return () => socket.close();
   }, []);
 
   const handleAdd = async () => {
@@ -65,18 +64,15 @@ export default function TripWires() {
       setAlerts((prev) => [newAlert, ...prev]);
       setInput("");
 
-      // 🎉 Success message
-      setMessage({ type: "success", text: "🚀 Alert added successfully!" });
+      // 🎉 Success message using Global Store
+      addToast("🚀 Alert added successfully!", "success");
 
     } catch (err) {
       console.error(err);
 
       // ❌ Error message
-      setMessage({ type: "error", text: "❌ Failed to add alert" });
+      addToast("❌ Failed to add alert", "error");
     }
-
-    // ⏳ Auto hide message
-    setTimeout(() => setMessage(null), 3000);
   };
 
   return (
@@ -89,16 +85,6 @@ export default function TripWires() {
 
       {/* Navbar */}
       <Navbar />
-
-      {/* 🔔 Toast Message */}
-      {message && (
-        <div className={`fixed top-6 right-6 px-6 py-3 rounded-xl shadow-lg backdrop-blur-md border 
-          ${message.type === "success"
-            ? "bg-green-500/20 border-green-400 text-green-300"
-            : "bg-red-500/20 border-red-400 text-red-300"}`}>
-          {message.text}
-        </div>
-      )}
 
       <div className="relative z-10 max-w-5xl mx-auto pt-24 px-4">
 

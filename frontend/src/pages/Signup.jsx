@@ -1,50 +1,75 @@
 import { Link, useNavigate } from "react-router-dom";
-import { useState } from "react";
+import { useState, useRef } from "react";
+import useToastStore from "../store/useToastStore";
 
 export default function Signup() {
 
     const navigate = useNavigate();
+    const addToast = useToastStore((s) => s.addToast);
 
     const [email, setEmail] = useState("");
     const [password, setPassword] = useState("");
     const [confirmPassword, setConfirmPassword] = useState("");
     const [name, setName] = useState("");
+    const [telegram, setTelegram] = useState("");
+    const [loading, setLoading] = useState(false);
+    const requestInProgressRef = useRef(false);
 
-    const handleSignup = async () => {
+    const handleSignup = async (e) => {
+        e.preventDefault();
 
-        // ✅ simple validation
-        if (password !== confirmPassword) {
-            alert("Passwords do not match");
+        // Prevent double-submit using ref (synchronous check)
+        if (requestInProgressRef.current) return;
+        requestInProgressRef.current = true;
+
+        // ✅ Validation
+        if (!name.trim() || !email.trim() || !telegram.trim() || !password.trim() || !confirmPassword.trim()) {
+            requestInProgressRef.current = false;
+            addToast("Please fill in all fields", "error");
             return;
         }
 
+        if (password !== confirmPassword) {
+            requestInProgressRef.current = false;
+            addToast("Passwords do not match", "error");
+            return;
+        }
+
+        setLoading(true);
         try {
-            const res = await fetch("http://localhost:8000/api/auth/signup", {
+            const res = await fetch("http://127.0.0.1:8000/api/auth/signup", {
                 method: "POST",
                 headers: {
                     "Content-Type": "application/json"
                 },
                 body: JSON.stringify({
+                    full_name: name,
                     email: email,
                     password: password,
-                    telegram_handle: name   // optional field
+                    telegram_handle: telegram
                 })
             });
 
             const data = await res.json();
 
             if (res.ok) {
-                alert(data.message);
+                // Show success toast
+                addToast("Profile created successfully! Redirecting to login...", "success", 2000);
 
-                // ✅ redirect to login
-                navigate("/login");
+                // Redirect to login after a short delay to let user see the toast
+                setTimeout(() => {
+                    navigate("/login");
+                }, 2100);
             } else {
-                alert(data.message || "Signup failed");
+                addToast(data.message || data.detail || "Signup failed", "error");
             }
 
         } catch (err) {
             console.error(err);
-            alert("Server error");
+            addToast("Server error", "error");
+        } finally {
+            requestInProgressRef.current = false;
+            setLoading(false);
         }
     };
 
@@ -63,49 +88,66 @@ export default function Signup() {
                         Create Account
                     </h2>
 
-                    {/* Name */}
-                    <input
-                        type="text"
-                        placeholder="Full Name"
-                        value={name}
-                        onChange={(e) => setName(e.target.value)}
-                        className="w-full p-3 mb-4 bg-white/[0.05] border border-white/10 rounded-lg outline-none focus:border-cyan-400"
-                    />
+                    <form onSubmit={handleSignup} className="space-y-4">
+                        {/* Name */}
+                        <input
+                            type="text"
+                            placeholder="Full Name"
+                            value={name}
+                            required
+                            onChange={(e) => setName(e.target.value)}
+                            className="w-full p-3 bg-white/[0.05] border border-white/10 rounded-lg outline-none focus:border-cyan-400"
+                        />
 
-                    {/* Email */}
-                    <input
-                        type="email"
-                        placeholder="Email"
-                        value={email}
-                        onChange={(e) => setEmail(e.target.value)}
-                        className="w-full p-3 mb-4 bg-white/[0.05] border border-white/10 rounded-lg outline-none focus:border-cyan-400"
-                    />
+                        {/* Email */}
+                        <input
+                            type="email"
+                            placeholder="Email"
+                            value={email}
+                            required
+                            onChange={(e) => setEmail(e.target.value)}
+                            className="w-full p-3 bg-white/[0.05] border border-white/10 rounded-lg outline-none focus:border-cyan-400"
+                        />
 
-                    {/* Password */}
-                    <input
-                        type="password"
-                        placeholder="Password"
-                        value={password}
-                        onChange={(e) => setPassword(e.target.value)}
-                        className="w-full p-3 mb-4 bg-white/[0.05] border border-white/10 rounded-lg outline-none focus:border-cyan-400"
-                    />
+                        {/* Telegram Handle */}
+                        <input
+                            type="text"
+                            placeholder="Telegram Handle (e.g., @yourhandle)"
+                            value={telegram}
+                            required
+                            onChange={(e) => setTelegram(e.target.value)}
+                            className="w-full p-3 bg-white/[0.05] border border-white/10 rounded-lg outline-none focus:border-cyan-400"
+                        />
 
-                    {/* Confirm Password */}
-                    <input
-                        type="password"
-                        placeholder="Confirm Password"
-                        value={confirmPassword}
-                        onChange={(e) => setConfirmPassword(e.target.value)}
-                        className="w-full p-3 mb-4 bg-white/[0.05] border border-white/10 rounded-lg outline-none focus:border-cyan-400"
-                    />
+                        {/* Password */}
+                        <input
+                            type="password"
+                            placeholder="Password"
+                            value={password}
+                            required
+                            onChange={(e) => setPassword(e.target.value)}
+                            className="w-full p-3 bg-white/[0.05] border border-white/10 rounded-lg outline-none focus:border-cyan-400"
+                        />
 
-                    {/* Button */}
-                    <button
-                        onClick={handleSignup}
-                        className="w-full py-2 rounded-lg bg-gradient-to-r from-cyan-400 to-purple-500 text-black font-semibold"
-                    >
-                        Create Account
-                    </button>
+                        {/* Confirm Password */}
+                        <input
+                            type="password"
+                            placeholder="Confirm Password"
+                            value={confirmPassword}
+                            required
+                            onChange={(e) => setConfirmPassword(e.target.value)}
+                            className="w-full p-3 bg-white/[0.05] border border-white/10 rounded-lg outline-none focus:border-cyan-400"
+                        />
+
+                        {/* Button */}
+                        <button
+                            type="submit"
+                            disabled={loading}
+                            className="w-full py-2 rounded-lg bg-gradient-to-r from-cyan-400 to-purple-500 text-black font-semibold disabled:opacity-50 disabled:cursor-not-allowed transition"
+                        >
+                            {loading ? "Creating Account..." : "Create Account"}
+                        </button>
+                    </form>
 
                     <p className="mt-6 text-sm text-center text-gray-400">
                         Already have an account?

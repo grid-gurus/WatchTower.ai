@@ -23,8 +23,17 @@ const useAppStore = create((set) => ({
     set({
       frameBasePath: `http://localhost:8000/data/frames/${data.source_id}`,
       clipStart: Math.floor(data.clip_start),
-      clipEnd: Math.floor(data.clip_end),
+      clipEnd: Math.ceil(data.clip_end),
       currentFrameTime: Math.floor(data.clip_start),
+      isEventPlaying: true,
+    }),
+
+  // 🎬 Manual Playback Trigger
+  playClip: (start, end) =>
+    set({
+      clipStart: Math.floor(start),
+      clipEnd: Math.ceil(end),
+      currentFrameTime: Math.floor(start),
       isEventPlaying: true,
     }),
 

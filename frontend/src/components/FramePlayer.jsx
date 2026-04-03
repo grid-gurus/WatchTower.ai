@@ -26,7 +26,7 @@ export default function FramePlayer() {
                 stopClip(); // stop after clip ends
                 clearInterval(interval);
             }
-        }, 200); // speed (lower = faster)
+        }, 500); // 500ms = 2 frames per second (Slow Motion)
 
         return () => clearInterval(interval);
     }, [clipStart, clipEnd, isEventPlaying]);

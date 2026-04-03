@@ -1,10 +1,11 @@
-import { Link, useNavigate } from "react-router-dom";
-import { Bell, Menu, X, History, Clock3 } from "lucide-react";
+import { Link, useNavigate, useLocation } from "react-router-dom";
+import { Bell, Menu, X, History, Clock3, LogOut } from "lucide-react";
 import { useEffect, useState } from "react";
 import useAlertStore from "../store/useAlertStore";
 
 export default function Navbar() {
   const navigate = useNavigate();
+  const location = useLocation();
 
   const [open, setOpen] = useState(false); // notifications
   const [sidebarOpen, setSidebarOpen] = useState(false); // history sidebar
@@ -18,15 +19,17 @@ export default function Navbar() {
 
   // auth state
   const [isLoggedIn, setIsLoggedIn] = useState(
-    Boolean(localStorage.getItem("token"))
+    Boolean(localStorage.getItem("access_token"))
   );
+
+  const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
 
   const notifications = useAlertStore((s) => s.notifications);
   const clearNotifications = useAlertStore((s) => s.clearNotifications);
 
   useEffect(() => {
     const syncAuthState = () => {
-      setIsLoggedIn(Boolean(localStorage.getItem("token")));
+      setIsLoggedIn(Boolean(localStorage.getItem("access_token")));
     };
 
     syncAuthState();
@@ -134,6 +137,37 @@ export default function Navbar() {
     navigate("/me");
   };
 
+  const handleLogout = async () => {
+    try {
+      // Call backend logout endpoint
+      const token = localStorage.getItem("access_token");
+      if (token) {
+        await fetch("http://127.0.0.1:8000/api/auth/logout", {
+          method: "POST",
+          headers: {
+            "Authorization": `Bearer ${token}`
+          }
+        });
+      }
+    } catch (err) {
+      console.error("Logout request failed:", err);
+    } finally {
+      // Clear all auth tokens and data
+      localStorage.removeItem("access_token");
+      localStorage.removeItem("refresh_token");
+      localStorage.removeItem("user_id");
+      localStorage.removeItem("email");
+      setIsLoggedIn(false);
+      setShowLogoutConfirm(false);
+      
+      // Dispatch event to sync auth state
+      window.dispatchEvent(new Event("auth-changed"));
+      
+      // Redirect to home
+      navigate("/");
+    }
+  };
+
   return (
     <>
       <div className="fixed top-0 w-full z-50">
@@ -163,24 +197,30 @@ export default function Navbar() {
 
           {/* Center Navigation */}
           <div className="hidden md:flex items-center justify-center gap-8 lg:gap-12 text-base lg:text-lg font-semibold tracking-wide whitespace-nowrap">
-            <Link
-              to="/"
-              className="bg-gradient-to-r from-white to-gray-400 bg-clip-text text-transparent hover:from-cyan-400 hover:to-purple-500 transition"
-            >
-              Home
-            </Link>
-            <Link
-              to="/dashboard"
-              className="bg-gradient-to-r from-white to-gray-400 bg-clip-text text-transparent hover:from-cyan-400 hover:to-purple-500 transition"
-            >
-              Dashboard
-            </Link>
-            <Link
-              to="/tripwires"
-              className="bg-gradient-to-r from-white to-gray-400 bg-clip-text text-transparent hover:from-cyan-400 hover:to-purple-500 transition"
-            >
-              Tripwires
-            </Link>
+            {location.pathname !== "/" && (
+              <Link
+                to="/"
+                className="bg-gradient-to-r from-white to-gray-400 bg-clip-text text-transparent hover:from-cyan-400 hover:to-purple-500 transition"
+              >
+                Home
+              </Link>
+            )}
+            {location.pathname !== "/dashboard" && (
+              <Link
+                to="/dashboard"
+                className="bg-gradient-to-r from-white to-gray-400 bg-clip-text text-transparent hover:from-cyan-400 hover:to-purple-500 transition"
+              >
+                Dashboard
+              </Link>
+            )}
+            {location.pathname !== "/tripwires" && (
+              <Link
+                to="/tripwires"
+                className="bg-gradient-to-r from-white to-gray-400 bg-clip-text text-transparent hover:from-cyan-400 hover:to-purple-500 transition"
+              >
+                Tripwires
+              </Link>
+            )}
           </div>
 
           {/* Right */}
@@ -330,9 +370,56 @@ export default function Navbar() {
                 </div>
               </div>
             </button>
+
+            {/* Logout - Only show when logged in */}
+            {isLoggedIn && (
+              <button
+                type="button"
+                onClick={() => setShowLogoutConfirm(true)}
+                className="shrink-0"
+                title="Logout"
+              >
+                <div className="p-[1.5px] rounded-full bg-gradient-to-r from-red-400 to-pink-500 hover:scale-105 transition">
+                  <div className="w-9 h-9 rounded-full bg-black flex items-center justify-center text-white hover:text-red-400 transition">
+                    <LogOut size={18} />
+                  </div>
+                </div>
+              </button>
+            )}
           </div>
         </div>
       </div>
+
+      {/* Logout Confirmation Modal */}
+      {showLogoutConfirm && (
+        <div className="fixed inset-0 z-[70] flex items-center justify-center">
+          {/* Backdrop */}
+          <div
+            className="absolute inset-0 bg-black/70 backdrop-blur-sm"
+            onClick={() => setShowLogoutConfirm(false)}
+          />
+
+          {/* Modal - Minimal Design */}
+          <div className="relative z-[71] p-[1.5px] rounded-xl bg-gradient-to-r from-red-400 to-pink-500">
+            <div className="bg-black rounded-xl p-8 flex flex-col items-center">
+              <button
+                onClick={handleLogout}
+                className="px-8 py-3 rounded-lg bg-gradient-to-r from-red-400 to-pink-500 text-white font-semibold hover:scale-105 transition mb-3"
+              >
+                Logout
+              </button>
+              
+              <button
+                onClick={() => setShowLogoutConfirm(false)}
+                className="p-2 rounded-lg hover:bg-white/10 transition"
+                title="Cancel"
+              >
+                <X size={20} className="text-gray-400 hover:text-white" />
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Sidebar Overlay */}
       {sidebarOpen && (

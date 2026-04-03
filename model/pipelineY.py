@@ -45,7 +45,9 @@ class OfflineVideoPipeline:
                 pil_img = Image.fromarray(rgb_frame)
                 
                 frame_path = f"./data/frames/{source_id}/t_{timestamp:.1f}.jpg"
-                self.io_pool.submit(pil_img.save, frame_path)
+                # SAVING SYNCHRONOUSLY: Ensures the file is on disk before the database knows it exists.
+                # Avoids race conditions in the background daemon!
+                pil_img.save(frame_path)
                 
                 batch_images.append(pil_img)
                 batch_metadatas.append({"source_id": source_id, "timestamp": timestamp, "frame_path": frame_path})
@@ -79,22 +81,36 @@ class OfflineVideoPipeline:
         if not results['ids'][0]:
             return {"status": "error", "message": "No matches found."}
 
-        frames = results['metadatas'][0]
-        timestamps = [m['timestamp'] for m in frames]
-        
+        # Filter frames to only include those that actually exist on disk!
+        # This prevents the frontend from getting 404s for "Ghost Matches"
+        raw_frames = results['metadatas'][0]
+        valid_frames = []
         vlm_content =[f"Query: '{text_query}'. Look VERY closely at these CCTV frames, especially for small details and objects. Did it happen? Be concise."]
+
+        for m in raw_frames: 
+            if os.path.exists(m['frame_path']):
+                valid_frames.append(m)
+                vlm_content.append(Image.open(m['frame_path']))
+            else:
+                print(f"  -> Ignoring stale metadata (file missing): {m['frame_path']}")
         
-        # Send ALL retrieved frames (top_k) to Gemini, not just the top 3!
-        for m in frames: 
-            vlm_content.append(Image.open(m['frame_path']))
+        # If no frames could be found at all, stop here.
+        if not valid_frames:
+            return {"status": "error", "message": "No valid image frames found on disk for this query."}
+        
+        # If no frames could be opened, don't waste an API call
+        if len(vlm_content) <= 1:
+            return {"status": "error", "message": "No valid image frames found on disk."}
 
         response = self.vlm_client.models.generate_content(model=self.vlm_model_name, contents=vlm_content)
         
+        valid_timestamps = [m['timestamp'] for m in valid_frames]
         return {
             "query": text_query,
             "response": response.text,
-            "source_id": frames[0]['source_id'],
-            "clip_start": max(0, min(timestamps) - 2.0),
-            "clip_end": max(timestamps) + 2.0,
-            "frame_path": frames[0]['frame_path']
+            "source_id": valid_frames[0]['source_id'],
+            "clip_start": max(0, min(valid_timestamps) - 2.0),
+            "clip_end": max(valid_timestamps) + 2.0,
+            "frame_path": valid_frames[0]['frame_path'],
+            "all_matches": valid_frames
         }

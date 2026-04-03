@@ -8,10 +8,12 @@ import Signup from "./pages/Signup";
 import UploadDropzone from "./components/UploadDropZone";
 import MyProfile from "./pages/MyProfile";
 import CreateAlert from "./pages/CreateAlert";
+import Toast from "./components/Toast";
 
 export default function App() {
   return (
     <div className="min-h-screen bg-black text-white">
+      <Toast />
       <Routes>
         <Route path="/" element={<Home />} />
         <Route path="/dashboard" element={<Dashboard />} />

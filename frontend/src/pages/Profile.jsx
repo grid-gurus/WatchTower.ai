@@ -1,14 +1,107 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 import Navbar from "../components/Navbar";
+import useToastStore from "../store/useToastStore";
 
 export default function Profile() {
+  const navigate = useNavigate();
+  const addToast = useToastStore((s) => s.addToast);
+
+  const [fullName, setFullName] = useState("");
   const [email, setEmail] = useState("");
   const [telegram, setTelegram] = useState("");
   const [phone, setPhone] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [fetching, setFetching] = useState(true);
 
-  const handleSave = () => {
-    console.log({ email, telegram, phone });
-    alert("Profile updated (connect backend later)");
+  // Load profile data on component mount
+  useEffect(() => {
+    const loadProfile = async () => {
+      try {
+        const token = localStorage.getItem("access_token");
+        if (!token) {
+          addToast("Please login first", "error");
+          navigate("/login");
+          return;
+        }
+
+        const res = await fetch("http://127.0.0.1:8000/api/auth/profile", {
+          method: "GET",
+          headers: {
+            "Content-Type": "application/json",
+            "Authorization": `Bearer ${token}`
+          }
+        });
+
+        if (res.ok) {
+          const data = await res.json();
+          setFullName(data.full_name || "");
+          setEmail(data.email || "");
+          setTelegram(data.telegram_handle || "");
+          setPhone(data.phone || "");
+        } else if (res.status === 401) {
+          addToast("Session expired. Please login again", "error");
+          localStorage.removeItem("access_token");
+          localStorage.removeItem("refresh_token");
+          navigate("/login");
+        } else {
+          const errorData = await res.json();
+          addToast(errorData.detail || "Failed to load profile", "error");
+        }
+      } catch (err) {
+        console.error(err);
+        addToast("Failed to load profile", "error");
+      } finally {
+        setFetching(false);
+      }
+    };
+
+    loadProfile();
+  }, []);
+
+  const handleSave = async () => {
+    setLoading(true);
+    try {
+      const token = localStorage.getItem("access_token");
+      if (!token) {
+        addToast("Please login first", "error");
+        navigate("/login");
+        return;
+      }
+
+      addToast("Saving profile...", "info", 1000);
+
+      const res = await fetch("http://127.0.0.1:8000/api/auth/profile", {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          full_name: fullName,
+          telegram_handle: telegram,
+          phone: phone
+        })
+      });
+
+      if (res.ok) {
+        addToast("Profile updated successfully!", "success");
+        console.log("Profile updated:", { fullName, email, telegram, phone });
+      } else if (res.status === 401) {
+        addToast("Session expired. Please login again", "error");
+        localStorage.removeItem("access_token");
+        localStorage.removeItem("refresh_token");
+        navigate("/login");
+      } else {
+        const errorData = await res.json();
+        addToast(errorData.detail || "Failed to save profile", "error");
+      }
+    } catch (err) {
+      console.error(err);
+      addToast("Failed to save profile", "error");
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -26,52 +119,70 @@ export default function Profile() {
 
         <div className="w-full max-w-xl p-[1.5px] rounded-xl bg-gradient-to-r from-cyan-400 to-purple-500">
 
-          <div className="bg-black rounded-xl p-8">
+            <div className="bg-black rounded-xl p-8">
 
             <h2 className="text-2xl font-bold mb-6 bg-gradient-to-r from-cyan-400 to-purple-500 bg-clip-text text-transparent">
               Profile Settings
             </h2>
 
-            <div className="mb-6">
-              <label className="text-sm text-gray-400">Email</label>
-              <input
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                placeholder="user@gmail.com"
-                className="w-full mt-1 p-3 rounded-lg bg-white/[0.05] border border-white/10 outline-none focus:border-cyan-400"
-              />
-            </div>
+            {fetching ? (
+              <div className="text-center text-gray-400">Loading profile...</div>
+            ) : (
+              <>
+                <div className="mb-6">
+                  <label className="text-sm text-gray-400">Full Name</label>
+                  <input
+                    value={fullName}
+                    onChange={(e) => setFullName(e.target.value)}
+                    placeholder="Your full name"
+                    className="w-full mt-1 p-3 rounded-lg bg-white/[0.05] border border-white/10 outline-none focus:border-cyan-400"
+                  />
+                </div>
 
-            <div className="mb-6">
-              <label className="text-sm text-gray-400">
-                Telegram Handle
-              </label>
-              <input
-                value={telegram}
-                onChange={(e) => setTelegram(e.target.value)}
-                placeholder="@your_handle"
-                className="w-full mt-1 p-3 rounded-lg bg-white/[0.05] border border-white/10 outline-none focus:border-cyan-400"
-              />
-            </div>
+                <div className="mb-6">
+                  <label className="text-sm text-gray-400">Email</label>
+                  <input
+                    value={email}
+                    disabled
+                    placeholder="user@gmail.com"
+                    className="w-full mt-1 p-3 rounded-lg bg-white/[0.05] border border-white/10 outline-none text-gray-500"
+                  />
+                  <p className="text-xs text-gray-500 mt-1">Email cannot be changed</p>
+                </div>
 
-            <div className="mb-6">
-              <label className="text-sm text-gray-400">
-                Notification Number
-              </label>
-              <input
-                value={phone}
-                onChange={(e) => setPhone(e.target.value)}
-                placeholder="+91 9876543210"
-                className="w-full mt-1 p-3 rounded-lg bg-white/[0.05] border border-white/10 outline-none focus:border-cyan-400"
-              />
-            </div>
+                <div className="mb-6">
+                  <label className="text-sm text-gray-400">
+                    Telegram Handle
+                  </label>
+                  <input
+                    value={telegram}
+                    onChange={(e) => setTelegram(e.target.value)}
+                    placeholder="@your_handle"
+                    className="w-full mt-1 p-3 rounded-lg bg-white/[0.05] border border-white/10 outline-none focus:border-cyan-400"
+                  />
+                </div>
 
-            <button
-              onClick={handleSave}
-              className="w-full py-3 rounded-lg bg-gradient-to-r from-cyan-400 to-purple-500 text-black font-semibold hover:scale-[1.02] transition"
-            >
-              Save Changes
-            </button>
+                <div className="mb-6">
+                  <label className="text-sm text-gray-400">
+                    Phone Number
+                  </label>
+                  <input
+                    value={phone}
+                    onChange={(e) => setPhone(e.target.value)}
+                    placeholder="+91 9876543210"
+                    className="w-full mt-1 p-3 rounded-lg bg-white/[0.05] border border-white/10 outline-none focus:border-cyan-400"
+                  />
+                </div>
+
+                <button
+                  onClick={handleSave}
+                  disabled={loading}
+                  className="w-full py-3 rounded-lg bg-gradient-to-r from-cyan-400 to-purple-500 text-black font-semibold hover:scale-[1.02] transition disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100"
+                >
+                  {loading ? "Saving..." : "Save Changes"}
+                </button>
+              </>
+            )}
 
           </div>
         </div>
