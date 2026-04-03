@@ -79,8 +79,11 @@ class OfflineVideoPipeline:
         frames = results['metadatas'][0]
         timestamps = [m['timestamp'] for m in frames]
         
-        vlm_content =[f"Query: '{text_query}'. Review these CCTV frames. Did it happen? Be concise."]
-        for m in frames[:3]: vlm_content.append(Image.open(m['frame_path']))
+        vlm_content =[f"Query: '{text_query}'. Look VERY closely at these CCTV frames, especially for small details and objects. Did it happen? Be concise."]
+        
+        # Send ALL retrieved frames (top_k) to Gemini, not just the top 3!
+        for m in frames: 
+            vlm_content.append(Image.open(m['frame_path']))
 
         response = self.vlm_client.models.generate_content(model=self.vlm_model_name, contents=vlm_content)
         
