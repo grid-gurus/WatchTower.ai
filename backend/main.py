@@ -1,5 +1,5 @@
 from fastapi.staticfiles import StaticFiles
-from fastapi import FastAPI, UploadFile, File, BackgroundTasks, Depends, HTTPException, Cookie, Response, WebSocket, WebSocketDisconnect, Header
+from fastapi import FastAPI, UploadFile, File, BackgroundTasks, Depends, HTTPException, Cookie, Response, WebSocket, WebSocketDisconnect, Header, Form
 from fastapi.responses import JSONResponse
 from fastapi.responses import StreamingResponse
 from fastapi.middleware.cors import CORSMiddleware
@@ -183,6 +183,8 @@ class AlertRule(BaseModel): condition: str
 class StreamConfig(BaseModel): stream_url: str; source_name: str = "cam_1"
 class LivestreamRequest(BaseModel): streams: List[StreamConfig]
 class QueryRequest(BaseModel): query: str
+class SpeakRequest(BaseModel):
+    text: str
 
 # =====================================================================
 # 4. API ENDPOINTS - AUTHENTICATION
@@ -419,6 +421,78 @@ async def manual_query(req: QueryRequest, db: Session = Depends(get_db)):
     except Exception as e:
         return {"status": "error", "message": "Crash occurred.", "developer_details": str(e)}
 
+@app.post("/api/trace")
+async def detective_trace(req: QueryRequest, db: Session = Depends(get_db)):
+    """
+    Detective Mode: Traces a suspect across all ingested cameras and builds a timeline report.
+    This is for cross-camera lineage tracking.
+    """
+    if not ml_engine:
+        return {"status": "error", "message": "ML Engine not loaded. Cannot perform trace."}
+        
+    try:
+        # Pass the query to the Detective Trace engine
+        result = ml_engine.track_timeline(req.query)
+        
+        # We can also save this to history if needed, but for now we'll just return it
+        return result
+    except Exception as e:
+        return {
+            "status": "error",
+            "message": "The Detective Engine failed. Check your ML logs.",
+            "developer_details": str(e)
+        }
+
+
+@app.post("/api/search-image")
+async def visual_suspect_search(
+    file: UploadFile = File(...), 
+    query: Optional[str] = Form(None),
+    db: Session = Depends(get_db)
+):
+    """
+    Mugshot Search: Upload a photo of a suspect to find them in the footage!
+    Now supports situational context (e.g. 'Find this person holding a laptop').
+    """
+    if not ml_engine:
+        return {"status": "error", "message": "ML Engine not loaded. Cannot perform visual search."}
+        
+    try:
+        # 📂 Create a temp folder for uploaded suspect photos
+        temp_dir = "./data/suspect_uploads/"
+        os.makedirs(temp_dir, exist_ok=True)
+        img_path = os.path.join(temp_dir, file.filename)
+        
+        # 💾 Save the suspect's photo to disk
+        with open(img_path, "wb") as buffer:
+            shutil.copyfileobj(file.file, buffer)
+            
+        # 🕵️ Call the ML "Reverse Image" Kernel (Now with text fusion!)
+        result = ml_engine.find_suspect_by_image(img_path, text_query=query)
+        
+        return result
+        
+    except Exception as e:
+        return {
+            "status": "error",
+            "message": "Visual search failed. Is the uploaded file a valid image?",
+            "developer_details": str(e)
+        }
+
+
+@app.post("/api/speak")
+async def manual_speak(req: SpeakRequest):
+    """
+    On-Demand Voice: Frontend triggers the server to speak an AI report.
+    This uses the 'clean_text_for_speech' filter to strip Markdown (**, ###).
+    """
+    try:
+        speak_alarm(req.text)
+        return {"status": "success", "message": "Voice triggered successfully."}
+    except Exception as e:
+        return {"status": "error", "message": str(e)}
+
+
 @app.post("/api/alerts/setup")
 async def setup_alert(rule: AlertRule, db: Session = Depends(get_db)):
     db_rule = models.AlertRuleDB(condition=rule.condition)
@@ -522,7 +596,8 @@ async def background_alert_daemon():
         finally:
             db.close()
                 
-        await asyncio.sleep(12)
+        # Wait 10 seconds before doing it all again (Reduced for faster demo)
+        await asyncio.sleep(10)
 
 @app.on_event("startup")
 async def startup_event():
@@ -530,11 +605,40 @@ async def startup_event():
     main_loop = asyncio.get_running_loop() # Capture loop to trigger video frames cleanly!
     asyncio.create_task(background_alert_daemon())
 
+
+def clean_text_for_speech(text: str) -> str:
+    """
+    Strips Markdown and special characters so the AI voice sounds human.
+    Turns '**Match Found**' into 'Match Found'.
+    """
+    import re
+    # Remove Bold/Italic asterisks
+    text = text.replace("**", "").replace("*", "")
+    # Remove Markdown headers (###)
+    text = re.sub(r'#+\s*', '', text)
+    # Remove bullet points at the start of lines
+    text = re.sub(r'^\s*[-•+]\s*', '', text, flags=re.MULTILINE)
+    # Clean up multiple newlines into single spaces for better flow
+    text = text.replace("\n", " ").strip()
+    return text
+
 def speak_alarm(phrase: str):
-    try:
-        import pyttsx3
-        engine = pyttsx3.init()
-        engine.say(phrase)
-        engine.runAndWait()
-    except Exception as e:
-        print(f"TTS Error: {e}")
+    """
+    Universal Text-to-speech alarm using pyttsx3 (Windows, Mac, Linux).
+    Runs in a background thread to prevent UI freezing.
+    """
+    def _speak():
+        try:
+            import pyttsx3
+            # Clean the phrase before speaking
+            clean_phrase = clean_text_for_speech(phrase)
+            
+            engine = pyttsx3.init()
+            engine.setProperty('rate', 160) 
+            engine.say(clean_phrase)
+            engine.runAndWait()
+            engine.stop()
+        except Exception as e:
+            print(f"Voice Engine Error: {e}")
+
+    threading.Thread(target=_speak, daemon=True).start()
