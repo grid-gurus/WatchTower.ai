@@ -1,6 +1,9 @@
 import cv2
 import torch
 import os
+
+# FIX: Allow OpenCV/FFmpeg to connect to local IP cameras using self-signed HTTPS certificates
+os.environ["OPENCV_FFMPEG_CAPTURE_OPTIONS"] = "tls_verify;0"
 import chromadb
 from PIL import Image
 import open_clip

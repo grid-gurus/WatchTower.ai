@@ -1,4 +1,4 @@
-from fastapi import FastAPI, UploadFile, File, BackgroundTasks, Depends, HTTPException
+from fastapi import FastAPI, UploadFile, File, BackgroundTasks, Depends, HTTPException, StaticFiles
 from pydantic import BaseModel
 import shutil
 import os
@@ -20,6 +20,32 @@ from model.pipelineY import OfflineVideoPipeline
 
 from fastapi.middleware.cors import CORSMiddleware
 
+from fastapi import WebSocket, WebSocketDisconnect
+
+# =====================================================================
+# WEBSOCKET MANAGER
+# =====================================================================
+class ConnectionManager:
+    def __init__(self):
+        self.active_connections: list[WebSocket] = []
+
+    async def connect(self, websocket: WebSocket):
+        await websocket.accept()
+        self.active_connections.append(websocket)
+
+    def disconnect(self, websocket: WebSocket):
+        self.active_connections.remove(websocket)
+
+    async def broadcast(self, message: dict):
+        for connection in self.active_connections:
+            try:
+                await connection.send_json(message)
+            except Exception as e:
+                print(f"Failed to send to a websocket client: {e}")
+
+# Create a global instance of the manager
+notifier = ConnectionManager()
+
 # Initialize the FastAPI App!
 app = FastAPI(title="WatchTower.ai Backend")
 
@@ -31,6 +57,11 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# 🔥 WOW FACTOR: Serve the /data folder so the React Frontend can 
+# actually see the images Gemini analyzes! 
+# Without this, the frontend will get 404 errors.
+app.mount("/data", StaticFiles(directory="data"), name="data")
 
 # Initialize the ML Engine from your teammate's code.
 import os
@@ -124,6 +155,22 @@ class QueryRequest(BaseModel):
 # =====================================================================
 # 4. API ENDPOINTS (The core of your Backend job)
 # =====================================================================
+
+# websocket end point setup
+@app.websocket("/ws/alerts")
+async def websocket_alerts(websocket: WebSocket):
+    """
+    Frontend connects here to listen for live AI security alerts.
+    """
+    await notifier.connect(websocket)
+    try:
+        # Keep the connection open and listening forever
+        while True:
+            # We don't actually expect the frontend to send us text, 
+            # but we need to await receive to keep the socket alive.
+            data = await websocket.receive_text() 
+    except WebSocketDisconnect:
+        notifier.disconnect(websocket)
 
 @app.post("/api/auth/signup")
 async def signup(user: UserSignup, db: Session = Depends(get_db)):
@@ -282,14 +329,28 @@ async def get_query_history(db: Session = Depends(get_db)):
 async def background_alert_daemon():
     """
     An infinite loop that runs all the time alongside our API.
-    Every 30 seconds, it asks the ML engine about every active rule.
-    If positive, we would theoretically trigger a Telegram bot alert!
+    Only performs ML queries if:
+    1. There are active alert rules in SQLite.
+    2. A video stream or upload is actually being processed.
     """
     while True:
-        print("[Daemon] Waking up to check active SQLite alert rules...")
-        
         db = SessionLocal()
         try:
+            # Count active rules efficiently (doesn't burn Gemini Quota!)
+            active_rules_count = db.query(models.AlertRuleDB).filter(models.AlertRuleDB.is_active == True).count()
+            
+            # Check if any camera or upload is currently "processing" or active
+            # This ensures we don't scan empty or static historical frames unnecessarily.
+            is_any_stream_active = any(status == "processing" for status in video_processing_status.values())
+
+            if active_rules_count == 0 or not is_any_stream_active:
+                # Silent mode: Skip logs and sleep longer to save system resources
+                db.close()
+                await asyncio.sleep(60) 
+                continue
+
+            print(f"[Daemon] Waking up to check {active_rules_count} active alert rules against live feed...")
+            
             active_rules = db.query(models.AlertRuleDB).filter(models.AlertRuleDB.is_active == True).all()
             for rule_db in active_rules:
                 rule_text = rule_db.condition
@@ -315,6 +376,15 @@ async def background_alert_daemon():
                                 alert_msg = f"🚨 SECURITY ALERT 🚨\n\nRule: '{rule_text}'\n🔎 AI Notes: {new_log.ai_analysis}"
                                 send_telegram_alert(alert_msg, result.get("frame_path"))
                                 # ----------------------------------------------
+
+                                # ---- NEW WEBSOCKET BROADCAST TO FRONTEND ----
+                                await notifier.broadcast({
+                                    "type": "NEW_ALERT",
+                                    "rule": rule_text,
+                                    "ai_analysis": new_log.ai_analysis,
+                                    "timestamp": new_log.timestamp_seconds,
+                                    "frame_path": result.get("frame_path")
+                                })
                                 
                                 # ---- WOW FACTOR 2: CROSS-PLATFORM TALKING ALARM ----
                                 safe_speech = rule_text.replace('"', '').replace("'", "")
