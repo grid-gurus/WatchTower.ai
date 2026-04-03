@@ -4,6 +4,7 @@ import shutil
 import os
 import sys
 import asyncio
+import requests
 from sqlalchemy.orm import Session
 
 # =====================================================================
@@ -42,6 +43,29 @@ dotenv.load_dotenv()
 api_key = os.getenv("GEMINI_API_KEY")
 if not api_key:
     print("CRITICAL ERROR: GEMINI_API_KEY is completely missing from your .env file!")
+
+TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
+TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")
+
+def send_telegram_alert(text: str, image_path: str = None):
+    """ Instantly blasts an HTTP request to Telegram API! """
+    if not TELEGRAM_BOT_TOKEN or not TELEGRAM_CHAT_ID: return
+    
+    try:
+        if image_path and os.path.exists(image_path):
+            with open(image_path, "rb") as image_file:
+                requests.post(
+                    f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendPhoto",
+                    data={"chat_id": TELEGRAM_CHAT_ID, "caption": text},
+                    files={"photo": image_file}
+                )
+        else:
+            requests.post(
+                f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage",
+                data={"chat_id": TELEGRAM_CHAT_ID, "text": text}
+            )
+    except Exception as e:
+        print(f"Failed to send Telegram alert: {e}")
 
 if OfflineVideoPipeline:
     ml_engine = OfflineVideoPipeline(api_key=api_key, collection_name="cctv_main_stream")
@@ -83,6 +107,15 @@ class UserSignup(BaseModel):
 
 class AlertRule(BaseModel):
     condition: str
+
+from typing import List
+
+class StreamConfig(BaseModel):
+    stream_url: str
+    source_name: str = "cam_1"
+
+class LivestreamRequest(BaseModel):
+    streams: List[StreamConfig]
 
 class QueryRequest(BaseModel):
     query: str
@@ -136,8 +169,24 @@ def process_video_task(file_path: str, source_id: str):
     finally:
         # VIDEO GARBAGE COLLECTION: Delete the massive MP4 file permanently!
         # The ML engine has already extracted the frames to VectorDB, we don't need the MP4 anymore.
-        if os.path.exists(file_path):
+        # IF IT IS A LIVESTREAM (http), skip deleting as it's not a local file.
+        if not file_path.startswith("http") and os.path.exists(file_path):
             os.remove(file_path)
+
+@app.post("/api/media/livestream")
+async def start_livestream(req: LivestreamRequest, background_tasks: BackgroundTasks):
+    """ Connects the backend to multiple live IP camera streams simultaneously! """
+    
+    # Limit to max 3 cameras to preserve Mac CPU performance during Hackathon
+    active_streams = req.streams[:3] 
+    
+    for config in active_streams:
+         background_tasks.add_task(process_video_task, config.stream_url, config.source_name)
+         
+    return {
+        "status": "success", 
+        "message": f"Successfully tracing {len(active_streams)} camera streams simultaneously in God's Eye mode!"
+    }
 
 @app.post("/api/media/upload")
 async def upload_video(background_tasks: BackgroundTasks, file: UploadFile = File(...)):
@@ -165,10 +214,10 @@ async def upload_video(background_tasks: BackgroundTasks, file: UploadFile = Fil
 
 
 @app.post("/api/query")
-async def manual_query(req: QueryRequest):
+async def manual_query(req: QueryRequest, db: Session = Depends(get_db)):
     """
     Allows the human operator to manually ask a question (e.g. "Did anyone drop a bag?").
-    We pass the human's text directly to the ML engine.
+    We pass the human's text directly to the ML engine and save it to the history sidebar.
     """
     if not ml_engine:
         return {"response": "Warning: ML Engine not loaded. This is a dummy response."}
@@ -176,6 +225,18 @@ async def manual_query(req: QueryRequest):
     try:
         # Pass the query to the ML pipeline
         result = ml_engine.query(req.query)
+        
+        # Save the interaction to the DB for the Frontend Sidebar History
+        if result.get("status") != "error":
+            history_log = models.QueryHistoryDB(
+                user_query=req.query,
+                ai_response=result.get("response", "Match found."),
+                frame_path=result.get("frame_path", ""),
+                video_source_id=result.get("source_id", "unknown")
+            )
+            db.add(history_log)
+            db.commit()
+            
         return result
     except Exception as e:
         # Prevent 500 Internal Server error if the ML pipeline fails
@@ -206,6 +267,14 @@ async def get_alert_logs(db: Session = Depends(get_db)):
     logs = db.query(models.TriggeredAlertDB).all()
     return {"total_alerts": len(logs), "logs": logs}
 
+@app.get("/api/query/history")
+async def get_query_history(db: Session = Depends(get_db)):
+    """
+    Returns the JSON log of all previous manual ChatGPT-style queries for the frontend sidebar.
+    Ordered by newest first.
+    """
+    history = db.query(models.QueryHistoryDB).order_by(models.QueryHistoryDB.created_at.desc()).all()
+    return {"total_queries": len(history), "history": history}
 
 # =====================================================================
 # 5. THE BACKGROUND DAEMON LOOP
@@ -230,19 +299,36 @@ async def background_alert_daemon():
                     try:
                         result = ml_engine.query(rule_text)
                         if result.get("status") != "error":
-                            # Store in SQLite permanently!
-                            new_log = models.TriggeredAlertDB(
-                                rule_tested=rule_text,
-                                ai_analysis=result.get("response", "Match found."),
-                                timestamp_seconds=result.get("clip_start", 0)
-                            )
-                            db.add(new_log)
+                            ai_response = result.get("response", "").lower()
                             
-                            # HACKATHON FIX: Deactivate the rule so it stops spamming the Google API!
-                            # This stops the 429 Quota Exceeded error from ruining your demo.
-                            rule_db.is_active = False
-                            
-                            db.commit()
+                            # CRITICAL FIX: Only trigger the alert if Gemini ACTUALLY says it found it!
+                            if "yes" in ai_response or "match found" in ai_response:
+                                # Store in SQLite permanently!
+                                new_log = models.TriggeredAlertDB(
+                                    rule_tested=rule_text,
+                                    ai_analysis=result.get("response", "Match found."),
+                                    timestamp_seconds=result.get("clip_start", 0)
+                                )
+                                db.add(new_log)
+                                
+                                # ---- WOW FACTOR: SEND TELEGRAM ALERT LIVE ----
+                                alert_msg = f"🚨 SECURITY ALERT 🚨\n\nRule: '{rule_text}'\n🔎 AI Notes: {new_log.ai_analysis}"
+                                send_telegram_alert(alert_msg, result.get("frame_path"))
+                                # ----------------------------------------------
+                                
+                                # ---- WOW FACTOR 2: MAC OS TALKING ALARM ----
+                                # Uses the native Mac voice to literally scream the alert from your laptop speakers!
+                                # The '&' runs it silently in the background without freezing the loop.
+                                safe_speech = rule_text.replace('"', '').replace("'", "")
+                                os.system(f'say "Security Alert! Watch Tower detected {safe_speech} on the camera feed!" &')
+                                # --------------------------------------------
+                                
+                                # HACKATHON FIX: Deactivate the rule so it stops spamming the API!
+                                rule_db.is_active = False
+                                db.commit()
+                            else:
+                                print(f"  -> AI verified but said NO: {ai_response}")
+                                # The rule stays ACTIVE and keeps watching the live stream forever!
                         else:
                              print(f"Warning: {result.get('message')}")
                     except Exception as e:
