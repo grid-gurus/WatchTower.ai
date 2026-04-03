@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Navbar from "../components/Navbar";
 import TripwireTable from "../components/TripWireTable";
 
@@ -8,6 +8,33 @@ export default function TripWires() {
   const [message, setMessage] = useState(null); // 🔥 for popup message
 
   const telegramHandle = "@your_handle"; // later from backend
+  
+  // 🔌 Establish Live WebSocket Connection
+  useEffect(() => {
+    const socket = new WebSocket("ws://127.0.0.1:8000/ws/alerts");
+
+    socket.onmessage = (event) => {
+      try {
+        const data = JSON.parse(event.data);
+        if (data.type === "NEW_ALERT") {
+          // 🎉 Trigger the toast notification pop-up
+          setMessage({ 
+            type: "success", 
+            text: `🚨 AI ALERT: ${data.rule} - ${data.ai_analysis.substring(0, 50)}...` 
+          });
+          
+          // Auto-hide toast after 5 seconds
+          setTimeout(() => setMessage(null), 5000);
+        }
+      } catch (err) {
+        console.error("WebSocket message error:", err);
+      }
+    };
+
+    socket.onclose = () => console.log("WebSocket Disconnected. Reconnect on refresh.");
+    
+    return () => socket.close(); // Clean up on page leave
+  }, []);
 
   const handleAdd = async () => {
     if (!input.trim()) return;
