@@ -17,6 +17,7 @@ def setup_environment():
     print("Initializing offline VectorDB...")
     client = chromadb.PersistentClient(path="./data/vector_db")
     
+    # Cosine similarity is best for CLIP embeddings
     client.get_or_create_collection(name="cctv_main_stream", metadata={"hnsw:space": "cosine"})
     client.get_or_create_collection(name="user_uploaded_media", metadata={"hnsw:space": "cosine"})
     

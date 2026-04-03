@@ -1,9 +1,12 @@
+import os
 from sqlalchemy import create_engine
 from sqlalchemy.orm import declarative_base, sessionmaker
 
-# We use SQLite because it's completely self-contained in a single file!
-# No need to sign up for AWS, Supabase, or any external websites.
-SQLALCHEMY_DATABASE_URL = "sqlite:///./watchtower.db"
+# Anchor the DB path to the project root (one level up from /backend/)
+# This prevents "readonly database" errors when uvicorn's CWD differs.
+_PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+_DB_PATH = os.path.join(_PROJECT_ROOT, "watchtower.db")
+SQLALCHEMY_DATABASE_URL = f"sqlite:///{_DB_PATH}"
 
 engine = create_engine(
     SQLALCHEMY_DATABASE_URL, connect_args={"check_same_thread": False}
