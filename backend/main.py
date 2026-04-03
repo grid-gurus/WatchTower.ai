@@ -316,11 +316,13 @@ async def background_alert_daemon():
                                 send_telegram_alert(alert_msg, result.get("frame_path"))
                                 # ----------------------------------------------
                                 
-                                # ---- WOW FACTOR 2: MAC OS TALKING ALARM ----
-                                # Uses the native Mac voice to literally scream the alert from your laptop speakers!
-                                # The '&' runs it silently in the background without freezing the loop.
+                                # ---- WOW FACTOR 2: CROSS-PLATFORM TALKING ALARM ----
                                 safe_speech = rule_text.replace('"', '').replace("'", "")
-                                os.system(f'say "Security Alert! Watch Tower detected {safe_speech} on the camera feed!" &')
+                                phrase = f"Security Alert! Watch Tower detected {safe_speech} on the camera feed!"
+                                
+                                # Spawns a background thread so the voice doesn't freeze the API loop!
+                                # Works natively on Windows, Mac, and Linux via pyttsx3.
+                                threading.Thread(target=speak_alarm, args=(phrase,), daemon=True).start()
                                 # --------------------------------------------
                                 
                                 # HACKATHON FIX: Deactivate the rule so it stops spamming the API!
