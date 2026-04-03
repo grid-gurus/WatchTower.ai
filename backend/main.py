@@ -270,13 +270,13 @@ async def verify_auth(authorization: Optional[str] = None, db: Session = Depends
 # =====================================================================
 @app.get("/api/media/status")
 async def check_processing_status():
-    if not video_processing_status: return {"status": "idle"}
+    if not video_processing_status: return {"status": "idle", "raw_status": {}}
     statuses = list(video_processing_status.values())
-    if "processing" in statuses: return {"status": "processing"}
-    elif "completed" in statuses: return {"status": "completed"}
+    if "processing" in statuses: return {"status": "processing", "raw_status": video_processing_status}
+    elif "completed" in statuses: return {"status": "completed", "raw_status": video_processing_status}
     for s in statuses:
-        if isinstance(s, str) and s.startswith("error"): return {"status": "failed"}
-    return {"status": "idle"}
+        if isinstance(s, str) and s.startswith("error"): return {"status": "failed", "raw_status": video_processing_status}
+    return {"status": "idle", "raw_status": video_processing_status}
 
 def process_video_task(file_path: str, source_id: str, status_dict, frame_dict, orientation_dict, collection_name="cctv_main_stream"):
     """ Threaded background task to safely process video without crashing PyTorch """
