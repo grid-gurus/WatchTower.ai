@@ -1,4 +1,5 @@
-from fastapi import FastAPI, UploadFile, File, BackgroundTasks, Depends, HTTPException, StaticFiles
+from fastapi import FastAPI, UploadFile, File, BackgroundTasks, Depends, HTTPException
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 import shutil
 import os
@@ -58,7 +59,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# 🔥 WOW FACTOR: Serve the /data folder so the React Frontend can 
+#  Serve the /data folder so the React Frontend can 
 # actually see the images Gemini analyzes! 
 # Without this, the frontend will get 404 errors.
 app.mount("/data", StaticFiles(directory="data"), name="data")
