@@ -1,4 +1,5 @@
-from sqlalchemy import Column, Integer, String, Boolean
+import datetime
+from sqlalchemy import Column, Integer, String, Boolean, DateTime
 from backend.database import Base
 
 class User(Base):
@@ -23,3 +24,15 @@ class TriggeredAlertDB(Base):
     rule_tested = Column(String)
     ai_analysis = Column(String)
     timestamp_seconds = Column(Integer)
+
+class QueryHistoryDB(Base):
+    """
+    Stores all the historical manual queries and AI responses for the ChatGPT-style sidebar UI.
+    """
+    __tablename__ = "query_history"
+    id = Column(Integer, primary_key=True, index=True)
+    user_query = Column(String, nullable=False)
+    ai_response = Column(String, nullable=False)
+    frame_path = Column(String, nullable=True)
+    video_source_id = Column(String, nullable=True)
+    created_at = Column(DateTime, default=datetime.datetime.utcnow)

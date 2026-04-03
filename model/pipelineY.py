@@ -16,7 +16,7 @@ class OfflineVideoPipeline:
         self.tokenizer = open_clip.get_tokenizer('ViT-B-32')
         
         self.chroma_client = chromadb.PersistentClient(path="./data/vector_db")
-        self.collection = self.chroma_client.get_collection(name=collection_name)
+        self.collection = self.chroma_client.get_or_create_collection(name=collection_name)
         
         self.vlm_client = genai.Client(api_key=api_key)
         self.vlm_model_name = "gemini-2.5-flash" # Use generic flash model
@@ -92,5 +92,6 @@ class OfflineVideoPipeline:
             "response": response.text,
             "source_id": frames[0]['source_id'],
             "clip_start": max(0, min(timestamps) - 2.0),
-            "clip_end": max(timestamps) + 2.0
+            "clip_end": max(timestamps) + 2.0,
+            "frame_path": frames[0]['frame_path']
         }
