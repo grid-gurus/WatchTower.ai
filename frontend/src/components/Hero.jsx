@@ -46,7 +46,7 @@ export default function Hero() {
           </Link>
 
           {/* Live Demo */}
-          <Link to="/dashboard">
+          <Link to="/uploaddropzone">
             <div className="p-[1.5px] rounded-lg bg-gradient-to-r from-cyan-400 to-purple-500">
               <button className="px-6 py-3 rounded-lg bg-black font-semibold transition-all duration-300 group">
                 <span className="text-white group-hover:bg-gradient-to-r group-hover:from-cyan-400 group-hover:to-purple-500 group-hover:bg-clip-text group-hover:text-transparent">

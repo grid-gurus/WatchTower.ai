@@ -5,21 +5,16 @@ import Profile from "./pages/Profile";
 import Tripwires from "./pages/TripWires";
 import Login from "./pages/Login";
 import Signup from "./pages/Signup";
+import UploadDropzone from "./components/UploadDropZone";
+import MyProfile from "./pages/MyProfile";
+import CreateAlert from "./pages/CreateAlert";
+import LiveStream from "./pages/LiveStream";
+import Toast from "./components/Toast";
 
 export default function App() {
   return (
     <div className="min-h-screen bg-black text-white">
-
-      {/* (Optional: you can remove this nav later since you already have Navbar component) */}
-      {/* <nav className="flex gap-4 p-4 border-b border-white/10">
-        <Link to="/">Home</Link>
-        <Link to="/dashboard">Dashboard</Link>
-        <Link to="/profile">Profile</Link>
-        <Link to="/tripwires">Tripwires</Link>
-        <Link to="/login">Login</Link>
-        <Link to="/signup">Signup</Link>
-      </nav> */}
-
+      <Toast />
       <Routes>
         <Route path="/" element={<Home />} />
         <Route path="/dashboard" element={<Dashboard />} />
@@ -28,7 +23,11 @@ export default function App() {
         {/* 🔥 ADD THESE */}
         <Route path="/login" element={<Login />} />
         <Route path="/signup" element={<Signup />} />
-        <Route path="/me" element={<Profile />} />
+        <Route path="/me/edit" element={<Profile />} />
+        <Route path="/uploaddropzone" element={<UploadDropzone />} />
+        <Route path="/me" element={<MyProfile />} />
+        <Route path="/alerts/create" element={<CreateAlert />} />
+        <Route path="/livestream" element={<LiveStream />} />
 
       </Routes>
     </div>
