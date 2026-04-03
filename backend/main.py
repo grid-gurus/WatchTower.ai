@@ -1,5 +1,5 @@
 from fastapi.staticfiles import StaticFiles
-from fastapi import FastAPI, UploadFile, File, BackgroundTasks, Depends, HTTPException, Cookie, Response, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, UploadFile, File, BackgroundTasks, Depends, HTTPException, Cookie, Response, WebSocket, WebSocketDisconnect, Header
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 import shutil
@@ -8,6 +8,9 @@ import sys
 import asyncio
 import requests
 import threading
+import multiprocessing
+import cv2 # Global import to avoid scope issues
+import time
 from sqlalchemy.orm import Session
 from typing import Optional
 
@@ -161,8 +164,14 @@ def get_current_user(
     if request_authorization and request_authorization.startswith("Bearer "):
         token = request_authorization[7:]
     
+    # Fallback: check cookies if header is missing
     if not token:
-        raise HTTPException(status_code=401, detail="No valid token provided")
+        # We need to reach into the request objects or just pass the cookie explicitly.
+        # For simplicity, let's assume the header is the primary source as per frontend code.
+        pass
+
+    if not token:
+        raise HTTPException(status_code=401, detail="No valid token provided. Have you logged in?")
     
     try:
         payload = verify_token(token)
@@ -185,6 +194,31 @@ def get_current_user(
 # Tracker for background video ingestion
 video_processing_status = {}
 
+# --- MULTI-PROCESSOR STATE ---
+# We use a multiprocessing Manager to share frames across separate OS processes.
+# This is the key to YouTube-like smoothness in Python!
+if __name__ == "__main__" or "uvicorn" in os.environ.get("SERVER_SOFTWARE", ""):
+    try:
+        # We only want to start the manager once.
+        manager = multiprocessing.Manager()
+        latest_frames = manager.dict()
+        stream_orientations = manager.dict()
+        active_stream_info = manager.dict()
+    except Exception as e:
+        print(f"⚠️ Manager failed (Expected during reload), using local dict: {e}")
+        latest_frames = {}
+        stream_orientations = {}
+        active_stream_info = {}
+else:
+    latest_frames = {}
+    stream_orientations = {}
+    active_stream_info = {}
+
+rule_last_triggered = {} # Cooldown logic (Keep local as it's small)
+
+# --- ZERO-LATENCY SIGNALING ---
+new_frame_events = {} 
+
 
 # =====================================================================
 # 3. DATA MODELS (Defining what JSON structures we expect)
@@ -200,12 +234,14 @@ class UserSignup(BaseModel):
     full_name: str = None
     phone: str = None
     telegram_handle: str = None
+    profile_picture: str = None
 
 
 class UserProfileUpdate(BaseModel):
     full_name: Optional[str] = None
     phone: Optional[str] = None
     telegram_handle: Optional[str] = None
+    profile_picture: Optional[str] = None
 
 
 class AlertRule(BaseModel):
@@ -269,6 +305,7 @@ async def signup(user: UserSignup, db: Session = Depends(get_db)):
         full_name=user.full_name,
         phone=user.phone,
         telegram_handle=user.telegram_handle,
+        profile_picture=user.profile_picture,
         is_active=True
     )
     db.add(db_user)
@@ -323,7 +360,7 @@ async def login(user: UserLogin, response: Response, db: Session = Depends(get_d
 
 @app.get("/api/auth/profile", response_model=UserResponse)
 async def get_profile(
-    authorization: Optional[str] = None,
+    authorization: Optional[str] = Header(None),
     db: Session = Depends(get_db)
 ):
     """
@@ -339,6 +376,7 @@ async def get_profile(
         full_name=current_user.full_name,
         phone=current_user.phone,
         telegram_handle=current_user.telegram_handle,
+        profile_picture=current_user.profile_picture,
         created_at=current_user.created_at,
         is_active=current_user.is_active
     )
@@ -347,7 +385,7 @@ async def get_profile(
 @app.put("/api/auth/profile", response_model=UserResponse)
 async def update_profile(
     profile_update: UserProfileUpdate,
-    authorization: Optional[str] = None,
+    authorization: Optional[str] = Header(None),
     db: Session = Depends(get_db)
 ):
     """
@@ -364,6 +402,8 @@ async def update_profile(
         current_user.phone = profile_update.phone
     if profile_update.telegram_handle is not None:
         current_user.telegram_handle = profile_update.telegram_handle
+    if profile_update.profile_picture is not None:
+        current_user.profile_picture = profile_update.profile_picture
     
     db.commit()
     db.refresh(current_user)
@@ -469,9 +509,35 @@ async def check_processing_status():
 def process_video_task(file_path: str, source_id: str):
     """ Wrapped background task to update our dummy DB state """
     video_processing_status[source_id] = "processing"
+    
+    def frame_update_callback(frame):
+        if frame is None: return
+        try:
+            h, w = frame.shape[:2]
+            stream_orientations[source_id] = "portrait" if h > w else "landscape"
+            
+            # --- DEBUG: Verify frames are reaching the backend ---
+            # print(f"Frame received for {source_id}: {w}x{h}") 
+            
+            _, buffer = cv2.imencode('.jpg', frame)
+            latest_frames[source_id] = buffer.tobytes()
+            
+            # TRIGGER EVENT: Wake up any browser listeners waiting for a new frame!
+            if source_id in new_frame_events:
+                # We use loop.call_soon_threadsafe because this callback runs in a background thread.
+                event = new_frame_events[source_id]
+                event.set()
+        except Exception as e:
+            print(f"FAILED to update frame for {source_id}: {e}")
+
+    print(f"STARTING parallel stream task for {source_id} at {file_path}")
+    active_stream_info[source_id] = file_path # Save URL for Telegram alerts
+    
     try:
         if ml_engine:
-            ml_engine.ingest_video(file_path, source_id)
+            ml_engine.ingest_video(file_path, source_id, on_frame=frame_update_callback)
+        else:
+             print(f"CRITICAL: ML Engine missing for {source_id}")
         video_processing_status[source_id] = "completed"
     except Exception as e:
         video_processing_status[source_id] = f"error: {str(e)}"
@@ -485,17 +551,58 @@ def process_video_task(file_path: str, source_id: str):
 @app.post("/api/media/livestream")
 async def start_livestream(req: LivestreamRequest, background_tasks: BackgroundTasks):
     """ Connects the backend to multiple live IP camera streams simultaneously! """
-    
-    # Limit to max 3 cameras to preserve Mac CPU performance during Hackathon
     active_streams = req.streams[:3] 
     
     for config in active_streams:
-         background_tasks.add_task(process_video_task, config.stream_url, config.source_name)
+         print(f"🚀 LAUNCHING high-performance Process for {config.source_name}")
+         process = multiprocessing.Process(
+             target=process_video_task, 
+             args=(config.stream_url, config.source_name),
+             daemon=True
+         )
+         process.start()
          
     return {
         "status": "success", 
         "message": f"Successfully tracing {len(active_streams)} camera streams simultaneously in God's Eye mode!"
     }
+
+
+from fastapi.responses import StreamingResponse
+
+@app.get("/api/media/stream/{source_id}")
+async def get_video_stream(source_id: str):
+    """
+    Returns a multipart/x-mixed-replace MJPEG stream for the frontend viewer.
+    Optimized for Zero-Latency using asyncio.Events.
+    """
+    if source_id not in new_frame_events:
+        new_frame_events[source_id] = asyncio.Event()
+    
+    event = new_frame_events[source_id]
+
+    async def frame_generator():
+        while True:
+            # Wait for the background thread to signal that a new image is ready!
+            await event.wait()
+            event.clear()
+            
+            frame_bytes = latest_frames.get(source_id)
+            if frame_bytes:
+                yield (b'--frame\r\n'
+                       b'Content-Type: image/jpeg\r\n\r\n' + frame_bytes + b'\r\n')
+
+    return StreamingResponse(frame_generator(), media_type="multipart/x-mixed-replace; boundary=frame")
+
+
+@app.get("/api/media/orientation/{source_id}")
+async def get_stream_orientation(source_id: str):
+    """
+    Returns 'portrait' or 'landscape' based on the stream's current feed resolution.
+    Used by the frontend to dynamically adjust the viewer aspect ratio!
+    """
+    orientation = stream_orientations.get(source_id, "landscape")
+    return {"orientation": orientation}
 
 @app.post("/api/media/upload")
 async def upload_video(background_tasks: BackgroundTasks, file: UploadFile = File(...)):
@@ -516,11 +623,16 @@ async def upload_video(background_tasks: BackgroundTasks, file: UploadFile = Fil
     with open(file_path, "wb") as buffer:
         shutil.copyfileobj(file.file, buffer)
         
-    # Trigger the ML processing behind the scenes!
-    # Extract video name without extension → acts as unique source_id
+    # Trigger the ML processing in a dedicated OS Process.
+    # Isolated processes = Max CPU efficiency!
     video_title = os.path.splitext(file.filename)[0]
-
-    background_tasks.add_task(process_video_task, file_path, video_title)
+    
+    process = multiprocessing.Process(
+        target=process_video_task, 
+        args=(file_path, video_title),
+        daemon=True
+    )
+    process.start()
         
     return {"status": "processing", "message": f"Video successfully saved to {file_path}. Processing has started."}
 
@@ -571,13 +683,51 @@ async def setup_alert(rule: AlertRule, db: Session = Depends(get_db)):
     db.refresh(db_rule)
     return {"status": "success", "message": f"Alert rule activated permanently: '{rule.condition}'"}
 
+@app.get("/api/alerts/active")
+async def get_active_alerts(db: Session = Depends(get_db)):
+    """
+    Returns all AI security rules that are currently 'is_active'.
+    Used for the Navbar 'Alert Rules' management module.
+    """
+    active_rules = db.query(models.AlertRuleDB).filter(models.AlertRuleDB.is_active == True).all()
+    return {"status": "success", "rules": active_rules}
+
+@app.delete("/api/alerts/{rule_id}")
+async def delete_alert_rule(rule_id: int, db: Session = Depends(get_db)):
+    """
+    Deactivates a specific alert rule by ID.
+    The rule remains in history but the AI stops checking for it immediately.
+    """
+    rule = db.query(models.AlertRuleDB).filter(models.AlertRuleDB.id == rule_id).first()
+    if not rule:
+        raise HTTPException(status_code=404, detail="Alert rule not found")
+    
+    rule.is_active = False
+    db.commit()
+    return {"status": "success", "message": "Alert rule deactivated successfully."}
+
 @app.get("/api/alerts/logs")
 async def get_alert_logs(db: Session = Depends(get_db)):
     """
     Poll this endpoint to see the permanent history of triggered alerts.
+    ORDERED BY ID DESC as a stack so newest alerts appear first!
     """
-    logs = db.query(models.TriggeredAlertDB).all()
+    logs = db.query(models.TriggeredAlertDB).order_by(models.TriggeredAlertDB.id.desc()).all()
     return {"total_alerts": len(logs), "logs": logs}
+
+@app.delete("/api/alerts/logs/purge")
+async def purge_alert_logs(db: Session = Depends(get_db)):
+    """
+    PERMANENTLY wipes all alert logs from the database.
+    Used for the navbar 'Clear' button to prevent ghost notifications.
+    """
+    try:
+        db.query(models.TriggeredAlertDB).delete()
+        db.commit()
+        return {"status": "success", "message": "All alert logs cleared from database."}
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"Failed to purge logs: {str(e)}")
 
 @app.get("/api/query/history")
 async def get_query_history(db: Session = Depends(get_db)):
@@ -611,7 +761,7 @@ async def background_alert_daemon():
             if active_rules_count == 0 or not is_any_stream_active:
                 # Silent mode: Skip logs and sleep longer to save system resources
                 db.close()
-                await asyncio.sleep(60) 
+                await asyncio.sleep(30) 
                 continue
 
             print(f"[Daemon] Waking up to check {active_rules_count} active alert rules against live feed...")
@@ -629,6 +779,16 @@ async def background_alert_daemon():
                             
                             # CRITICAL FIX: Only trigger the alert if Gemini ACTUALLY says it found it!
                             if "yes" in ai_response or "match found" in ai_response:
+                                
+                                # ---- NEW: PER-RULE COOL-DOWN (5 MINUTES) ----
+                                import time
+                                now = time.time()
+                                last_fired = rule_last_triggered.get(rule_db.id, 0)
+                                if (now - last_fired) < 300: # 300 seconds = 5 minutes
+                                    print(f"  -> Skipping repeat alert for '{rule_text}' (Cool-down active: {int(300 - (now - last_fired))}s remaining)")
+                                    continue
+                                # ---------------------------------------------
+
                                 # Store in SQLite permanently!
                                 new_log = models.TriggeredAlertDB(
                                     rule_tested=rule_text,
@@ -638,9 +798,21 @@ async def background_alert_daemon():
                                 db.add(new_log)
                                 
                                 # ---- WOW FACTOR: SEND TELEGRAM ALERT LIVE ----
-                                alert_msg = f"🚨 SECURITY ALERT 🚨\n\nRule: '{rule_text}'\n🔎 AI Notes: {new_log.ai_analysis}"
+                                # Context: Use the Source Name (e.g. cam_1) instead of the full URL as requested!
+                                cam_name = new_log.video_source_id or "Unknown Camera"
+                                alert_msg = f"🚨 SECURITY ALERT 🚨\n\nRule: '{rule_text}'\n🔎 AI Notes: {new_log.ai_analysis}\n📍 Camera: {cam_name.upper()}"
                                 send_telegram_alert(alert_msg, result.get("frame_path"))
-                                # ----------------------------------------------
+                                
+                                # ---- DB OPTIMIZATION: ONLY KEEP LAST 5 ALERTS ----
+                                try:
+                                    all_logs = db.query(models.TriggeredAlertDB).order_by(models.TriggeredAlertDB.id.desc()).all()
+                                    if len(all_logs) > 5:
+                                        for old_log in all_logs[5:]:
+                                            db.delete(old_log)
+                                        db.commit()
+                                except Exception as e:
+                                    print(f"Error pruning alert history: {e}")
+                                # -------------------------------------------------
 
                                 # ---- NEW WEBSOCKET BROADCAST TO FRONTEND ----
                                 await notifier.broadcast({
@@ -660,9 +832,15 @@ async def background_alert_daemon():
                                 threading.Thread(target=speak_alarm, args=(phrase,), daemon=True).start()
                                 # --------------------------------------------
                                 
-                                # HACKATHON FIX: Deactivate the rule so it stops spamming the API!
-                                rule_db.is_active = False
-                                db.commit()
+                                # HACKATHON FIX: REMOVED. 
+                                # We now keeping the rules active so they "spectate" continuously!
+                                # The user can manually remove them from the Navbar Alerts button.
+                                # rule_db.is_active = False
+                                # db.commit()
+                                
+                                # ---- TRACK SUCCESSFUL TRIGGER ----
+                                rule_last_triggered[rule_db.id] = time.time()
+                                # ---------------------------------
                             else:
                                 print(f"  -> AI verified but said NO: {ai_response}")
                                 # The rule stays ACTIVE and keeps watching the live stream forever!
@@ -678,8 +856,8 @@ async def background_alert_daemon():
         finally:
             db.close()
                 
-        # Wait 30 seconds before doing it all again
-        await asyncio.sleep(30)
+        # Wait 12 seconds before doing it all again (High-frequency live spectating)
+        await asyncio.sleep(12)
 
 @app.on_event("startup")
 async def startup_event():

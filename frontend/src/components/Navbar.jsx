@@ -16,11 +16,16 @@ export default function Navbar() {
   const [alertLogs, setAlertLogs] = useState([]);
   const [alertLogsLoading, setAlertLogsLoading] = useState(false);
   const [alertLogsError, setAlertLogsError] = useState("");
+  
+  // -- NEW: Active Alert Rules (The ones the AI is currently watching for) --
+  const [activeRules, setActiveRules] = useState([]);
+  const [activeRulesLoading, setActiveRulesLoading] = useState(false);
+  const [showActiveRules, setShowActiveRules] = useState(false);
 
-  // auth state
   const [isLoggedIn, setIsLoggedIn] = useState(
     Boolean(localStorage.getItem("access_token"))
   );
+  const [userProfile, setUserProfile] = useState(null);
 
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
 
@@ -41,6 +46,28 @@ export default function Navbar() {
       window.removeEventListener("auth-changed", syncAuthState);
     };
   }, []);
+
+  useEffect(() => {
+    const fetchProfile = async () => {
+      if (!isLoggedIn) {
+        setUserProfile(null);
+        return;
+      }
+      try {
+        const token = localStorage.getItem("access_token");
+        const res = await fetch("http://127.0.0.1:8000/api/auth/profile", {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        if (res.ok) {
+          const data = await res.json();
+          setUserProfile(data);
+        }
+      } catch (err) {
+        console.error("Navbar profile fetch failed:", err);
+      }
+    };
+    fetchProfile();
+  }, [isLoggedIn]);
 
   useEffect(() => {
     const fetchHistory = async () => {
@@ -120,6 +147,62 @@ export default function Navbar() {
 
     fetchAlertLogs();
   }, [open, isLoggedIn]);
+  
+  // -- NEW: Fetch Active Alert Rules --
+  const fetchActiveRules = async () => {
+    if (!isLoggedIn) return;
+    setActiveRulesLoading(true);
+    try {
+      const res = await fetch("http://127.0.0.1:8000/api/alerts/active");
+      if (res.ok) {
+        const data = await res.json();
+        setActiveRules(data.rules || []);
+      }
+    } catch (err) {
+      console.error("Failed to fetch active rules:", err);
+    } finally {
+      setActiveRulesLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (showActiveRules) fetchActiveRules();
+  }, [showActiveRules, isLoggedIn]);
+
+  const handleDeleteRule = async (ruleId) => {
+    try {
+      const res = await fetch(`http://127.0.0.1:8000/api/alerts/${ruleId}`, {
+        method: "DELETE"
+      });
+      if (res.ok) {
+        // Refresh the list
+        fetchActiveRules();
+      }
+    } catch (err) {
+      console.error("Failed to delete rule:", err);
+    }
+  };
+
+  const handleClearNotifications = async () => {
+    try {
+      // PERMANENT PURGE: Wipe from Database so they don't return on refresh
+      const token = localStorage.getItem("access_token");
+      const res = await fetch("http://127.0.0.1:8000/api/alerts/logs/purge", {
+        method: "DELETE",
+        headers: {
+          "Authorization": `Bearer ${token}`
+        }
+      });
+
+      if (res.ok) {
+        clearNotifications(); // Clear Zustand store
+        setAlertLogs([]);    // Clear local component state
+        console.log("🔥 Notifications purged from DB successfully.");
+      }
+    } catch (err) {
+      console.error("Failed to purge alert logs:", err);
+    }
+  };
 
   const handleNotificationClick = () => {
     if (!isLoggedIn) {
@@ -221,22 +304,70 @@ export default function Navbar() {
                 Tripwires
               </Link>
             )}
+            {location.pathname !== "/livestream" && (
+              <Link
+                to="/livestream"
+                className="bg-gradient-to-r from-white to-gray-400 bg-clip-text text-transparent hover:from-cyan-400 hover:to-purple-500 transition"
+              >
+                Live Stream
+              </Link>
+            )}
           </div>
 
           {/* Right */}
           <div className="flex items-center justify-end gap-5 shrink-0 whitespace-nowrap pr-4 md:pr-8">
             {isLoggedIn ? (
               <>
-                {/* Create Alert */}
-                <Link to="/alerts/create" className="shrink-0">
-                  <div className="p-[1.5px] rounded-lg bg-gradient-to-r from-green-400 to-cyan-500">
-                    <button className="px-4 py-2 rounded-lg bg-black font-medium group">
-                      <span className="text-white text-sm group-hover:bg-gradient-to-r group-hover:from-green-400 group-hover:to-cyan-500 group-hover:bg-clip-text group-hover:text-transparent">
-                        + Create Alert
+                {/* --- NEW: Active Alerts Manager --- */}
+                <div className="relative">
+                  <div className="p-[1.5px] rounded-lg bg-gradient-to-r from-cyan-400 to-blue-500">
+                    <button 
+                      onClick={() => setShowActiveRules(!showActiveRules)}
+                      className="px-4 py-2 rounded-lg bg-black font-medium group flex items-center gap-2"
+                    >
+                       <span className="w-2 h-2 rounded-full bg-cyan-400 animate-pulse"></span>
+                      <span className="text-white text-sm group-hover:bg-gradient-to-r group-hover:from-cyan-400 group-hover:to-blue-500 group-hover:bg-clip-text group-hover:text-transparent">
+                        Active Alerts ({activeRules.length})
                       </span>
                     </button>
                   </div>
-                </Link>
+
+                  {showActiveRules && (
+                    <div className="absolute right-0 mt-3 w-80 bg-black/95 backdrop-blur-xl border border-white/10 rounded-xl shadow-2xl p-5 z-[100] animate-in fade-in zoom-in duration-200">
+                      <div className="flex justify-between items-center mb-4 pb-2 border-b border-white/5">
+                        <h3 className="text-sm font-bold text-cyan-400 uppercase tracking-wider">AI Watchlist</h3>
+                        <Link to="/alerts/create" onClick={() => setShowActiveRules(false)} className="text-[10px] bg-white/10 hover:bg-white/20 px-2 py-1 rounded transition text-gray-300">+ New Rule</Link>
+                      </div>
+
+                      {activeRulesLoading ? (
+                        <div className="py-4 text-center text-xs text-gray-500 italic">Scanning active rules...</div>
+                      ) : activeRules.length === 0 ? (
+                        <div className="py-8 text-center">
+                          <p className="text-gray-500 text-xs">No active AI rules.</p>
+                          <Link to="/alerts/create" onClick={() => setShowActiveRules(false)} className="text-cyan-400 text-[10px] mt-2 block hover:underline">Click here to create your first alert</Link>
+                        </div>
+                      ) : (
+                        <div className="space-y-3 max-h-64 overflow-y-auto pr-1 custom-scrollbar">
+                          {activeRules.map((rule) => (
+                            <div key={rule.id} className="group p-3 rounded-lg bg-white/[0.03] border border-white/5 hover:border-cyan-400/30 transition-all flex justify-between items-center gap-3">
+                              <div className="min-w-0">
+                                <p className="text-xs text-white font-medium truncate italic">"{rule.condition}"</p>
+                                <p className="text-[10px] text-gray-500 mt-1">Status: <span className="text-green-500">Monitoring...</span></p>
+                              </div>
+                              <button 
+                                onClick={() => handleDeleteRule(rule.id)}
+                                className="p-1.5 rounded-md hover:bg-red-500/20 text-gray-500 hover:text-red-400 transition"
+                                title="Stop Monitoring"
+                              >
+                                <X size={14} />
+                              </button>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
               </>
             ) : (
               <>
@@ -286,7 +417,7 @@ export default function Navbar() {
                   <div className="flex justify-between items-center">
                     <span className="text-sm text-gray-400">Notifications</span>
                     <button
-                      onClick={clearNotifications}
+                      onClick={handleClearNotifications}
                       className="text-xs text-cyan-400 hover:underline"
                     >
                       Clear
@@ -307,12 +438,18 @@ export default function Navbar() {
                   ) : alertLogs.length > 0 ? (
                     <div className="space-y-3">
                       {alertLogs.map((item, i) => {
-                        const message =
+                        const rawMessage =
+                          item.rule_tested ||
                           item.message ||
                           item.alert ||
                           item.text ||
                           item.title ||
                           "Alert";
+                          
+                        // Ellipsis / Truncation for long titles
+                        const message = rawMessage.length > 25 
+                          ? rawMessage.substring(0, 25) + "..." 
+                          : rawMessage;
 
                         const time =
                           item.created_at ||
@@ -344,15 +481,19 @@ export default function Navbar() {
                   ) : notifications.length === 0 ? (
                     <p className="text-gray-500 text-sm">No alerts yet</p>
                   ) : (
-                    notifications.map((n, i) => (
-                      <div
-                        key={i}
-                        className="p-3 rounded-lg bg-red-500/10 border border-red-400/30"
-                      >
-                        <p className="text-white text-sm">🚨 {n.message}</p>
-                        <p className="text-xs text-gray-400 mt-1">{n.time}</p>
-                      </div>
-                    ))
+                      notifications.map((n, i) => {
+                        const rawMsg = n.message || "Alert";
+                        const displayMsg = rawMsg.length > 25 ? rawMsg.substring(0, 25) + "..." : rawMsg;
+                        return (
+                          <div
+                            key={i}
+                            className="p-3 rounded-lg bg-red-500/10 border border-red-400/30"
+                          >
+                            <p className="text-white text-sm" title={rawMsg}>🚨 {displayMsg}</p>
+                            <p className="text-xs text-gray-400 mt-1">{n.time}</p>
+                          </div>
+                        );
+                      })
                   )}
                 </div>
               )}
@@ -365,8 +506,12 @@ export default function Navbar() {
               className="shrink-0"
             >
               <div className="p-[1.5px] rounded-full bg-gradient-to-r from-cyan-400 to-purple-500 hover:scale-105 transition">
-                <div className="w-9 h-9 rounded-full bg-black flex items-center justify-center text-white font-semibold">
-                  U
+                <div className="w-9 h-9 rounded-full bg-black flex items-center justify-center text-white font-semibold overflow-hidden">
+                  {userProfile?.profile_picture ? (
+                    <img src={userProfile.profile_picture} alt="Avatar" className="w-full h-full object-cover" />
+                  ) : (
+                    <span>{userProfile?.full_name ? userProfile.full_name[0].toUpperCase() : "U"}</span>
+                  )}
                 </div>
               </div>
             </button>

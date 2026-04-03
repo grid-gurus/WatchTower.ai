@@ -9,6 +9,9 @@ from PIL import Image
 import open_clip
 from google import genai
 import concurrent.futures
+import queue
+import threading
+import uuid
 
 class OfflineVideoPipeline:
     def __init__(self, api_key, collection_name="cctv_main_stream"):
@@ -21,15 +24,65 @@ class OfflineVideoPipeline:
         self.chroma_client = chromadb.PersistentClient(path="./data/vector_db")
         self.collection = self.chroma_client.get_or_create_collection(name=collection_name)
         
-        self.vlm_client = genai.Client(api_key=api_key)
-        self.vlm_model_name = "gemini-2.5-flash" # Use generic flash model
+        self.vlm_client = genai.Client(api_key=api_key, http_options={'api_version': 'v1'})
+        self.vlm_model_name = "gemini-1.5-flash" 
         self.io_pool = concurrent.futures.ThreadPoolExecutor(max_workers=8)
+        
+        # --- NEW: AI INGESTION QUEUE (Fixes Jerkiness!) ---
+        # This queue holds frames waiting to be processed by CLIP.
+        # It allows the main VideoCapture loop to run at 30 FPS without waiting for the AI.
+        self.ai_queue = queue.Queue(maxsize=128)
+        self.worker_thread = threading.Thread(target=self._ai_worker, daemon=True)
+        self.worker_thread.start()
 
-    def ingest_video(self, video_path, source_id, fps_to_extract=1, batch_size=64):
+    def _ai_worker(self):
+        """ Background thread that crunches numbers while the video plays smoothly. """
+        batch_images, batch_metadatas, batch_ids = [], [], []
+        
+        while True:
+            try:
+                task = self.ai_queue.get()
+                if task is None: break # Shutdown signal
+                
+                raw_frame, metadata, source_id, timestamp = task
+                
+                # --- HEAVY LIFTING: Color conversion and PIL creation moved here! ---
+                # This ensures the main VideoCapture loop is as fast as humanly possible.
+                rgb_frame = cv2.cvtColor(raw_frame, cv2.COLOR_BGR2RGB)
+                pil_img = Image.fromarray(rgb_frame)
+                
+                # 1. Save frame to disk (IO)
+                frame_path = metadata["frame_path"]
+                pil_img.save(frame_path)
+                
+                # 2. Batch for CLIP (AI)
+                batch_images.append(pil_img)
+                batch_metadatas.append(metadata)
+                
+                # UNIQUE ID: Add a uuid suffix to prevent "Duplicated IDs" errors in ChromaDB.
+                unique_id = f"{source_id}_{timestamp}_{uuid.uuid4().hex[:6]}"
+                batch_ids.append(unique_id)
+                
+                if len(batch_images) >= 32: # Smaller batch for responsiveness
+                    self._store_batch(batch_images, batch_metadatas, batch_ids)
+                    batch_images, batch_metadatas, batch_ids = [], [], []
+                
+                self.ai_queue.task_done()
+            except Exception as e:
+                print(f"❌ [AI Worker] ERROR: {e}")
+
+    def ingest_video(self, video_path, source_id, fps_to_extract=1, batch_size=64, on_frame=None):
         """Extracts frames, gets embeddings, and saves to VectorDB."""
         os.makedirs(f"./data/frames/{source_id}", exist_ok=True)
         cap = cv2.VideoCapture(video_path)
+        
+        if not cap.isOpened():
+            print(f"❌ [ML Engine] ERROR: Could not open video source: {video_path}")
+            return
+            
+        print(f"✅ [ML Engine] Successfully connected to source: {source_id}")
         fps = round(cap.get(cv2.CAP_PROP_FPS))
+        if fps <= 0: fps = 25 # Fallback for streams
         frame_interval = max(1, int(fps / fps_to_extract))
         
         count = 0
@@ -39,28 +92,25 @@ class OfflineVideoPipeline:
             ret, frame = cap.read()
             if not ret: break
             
+            # --- HIGH PRIORITY: Update Live Preview (Smooth MJPEG) ---
+            if on_frame:
+                on_frame(frame)
+            
+            # --- LOW PRIORITY: AI Analysis (Through Queue) ---
             if count % frame_interval == 0:
                 timestamp = count / fps
-                rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-                pil_img = Image.fromarray(rgb_frame)
-                
                 frame_path = f"./data/frames/{source_id}/t_{timestamp:.1f}.jpg"
-                # SAVING SYNCHRONOUSLY: Ensures the file is on disk before the database knows it exists.
-                # Avoids race conditions in the background daemon!
-                pil_img.save(frame_path)
+                metadata = {"source_id": source_id, "timestamp": timestamp, "frame_path": frame_path}
                 
-                batch_images.append(pil_img)
-                batch_metadatas.append({"source_id": source_id, "timestamp": timestamp, "frame_path": frame_path})
-                batch_ids.append(f"{source_id}_{timestamp}")
+                # Push RAW BGR frame to background worker.
+                # We use .copy() to ensure the worker doesn't see memory changes.
+                try:
+                    self.ai_queue.put_nowait((frame.copy(), metadata, source_id, timestamp))
+                except queue.Full:
+                    pass 
                 
-                if len(batch_images) == batch_size:
-                    self._store_batch(batch_images, batch_metadatas, batch_ids)
-                    batch_images, batch_metadatas, batch_ids = [], [],[]
             count += 1
         cap.release()
-        
-        if batch_images:
-            self._store_batch(batch_images, batch_metadatas, batch_ids)
 
     def _store_batch(self, images, metadatas, ids):
         tensors = torch.stack([self.preprocess(img) for img in images]).to(self.device)

@@ -12,6 +12,7 @@ export default function Signup() {
     const [confirmPassword, setConfirmPassword] = useState("");
     const [name, setName] = useState("");
     const [telegram, setTelegram] = useState("");
+    const [profilePic, setProfilePic] = useState("");
     const [loading, setLoading] = useState(false);
     const requestInProgressRef = useRef(false);
 
@@ -46,7 +47,8 @@ export default function Signup() {
                     full_name: name,
                     email: email,
                     password: password,
-                    telegram_handle: telegram
+                    telegram_handle: telegram,
+                    profile_picture: profilePic
                 })
             });
 
@@ -116,6 +118,15 @@ export default function Signup() {
                             value={telegram}
                             required
                             onChange={(e) => setTelegram(e.target.value)}
+                            className="w-full p-3 bg-white/[0.05] border border-white/10 rounded-lg outline-none focus:border-cyan-400"
+                        />
+
+                        {/* Profile Picture URL */}
+                        <input
+                            type="text"
+                            placeholder="Profile Picture URL (Online or Local)"
+                            value={profilePic}
+                            onChange={(e) => setProfilePic(e.target.value)}
                             className="w-full p-3 bg-white/[0.05] border border-white/10 rounded-lg outline-none focus:border-cyan-400"
                         />
 
