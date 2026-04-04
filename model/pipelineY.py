@@ -214,7 +214,7 @@ class OfflineVideoPipeline:
 
         # ── VLM ──────────────────────────────────────────────────────────────
         self.vlm_client     = genai.Client(api_key=api_key)
-        self.vlm_model_name = "gemini-2.5-flash"
+        self.vlm_model_name = "gemini-2.5-flash-lite"
         self._vlm_cache: dict[str, str] = {}
 
         # ── Async I/O pool ───────────────────────────────────────────────────
