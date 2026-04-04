@@ -33,6 +33,7 @@ from backend.auth import (
 # =====================================================================
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from model.pipelineY import OfflineVideoPipeline
+from backend.armoriq import armoriq_supervisor
 
 # =====================================================================
 # WEBSOCKET MANAGER
@@ -417,6 +418,12 @@ async def manual_query(req: QueryRequest, db: Session = Depends(get_db)):
         if not source_id:
              return {"status": "error", "message": "No active video or stream found."}
              
+        # --- ArmorIQ Intercept ---
+        armoriq_result = armoriq_supervisor.evaluate_request(req.query, context=source_id)
+        if armoriq_result["status"] == "blocked":
+            return armoriq_result
+        # -------------------------
+             
         is_live = source_id in active_stream_info and active_stream_info[source_id].startswith("http")
         print(f"🕵️ [Manual Query] Searching '{req.query}' in {'LIVE' if is_live else 'UPLOADS'} (Source: {source_id})")
         
@@ -441,6 +448,13 @@ async def detective_trace(req: QueryRequest, db: Session = Depends(get_db)):
     This is for cross-camera lineage tracking.
     """
     print(f"[API] POST /api/trace - Detective trace initiated for: '{req.query}'")
+    
+    # --- ArmorIQ Intercept ---
+    armoriq_result = armoriq_supervisor.evaluate_request(req.query, context="global")
+    if armoriq_result["status"] == "blocked":
+        return armoriq_result
+    # -------------------------
+    
     if not ml_engine:
         return {"status": "error", "message": "ML Engine not loaded. Cannot perform trace."}
         
@@ -469,6 +483,14 @@ async def visual_suspect_search(
     Now supports situational context (e.g. 'Find this person holding a laptop').
     """
     print(f"[API] POST /api/search-image - Searching image '{file.filename}' with context: '{query}'")
+    
+    # --- ArmorIQ Intercept ---
+    if query:
+        armoriq_result = armoriq_supervisor.evaluate_request(query, context="global")
+        if armoriq_result["status"] == "blocked":
+            return armoriq_result
+    # -------------------------
+    
     if not ml_engine:
         return {"status": "error", "message": "ML Engine not loaded. Cannot perform visual search."}
         
@@ -511,6 +533,13 @@ async def manual_speak(req: SpeakRequest):
 @app.post("/api/alerts/setup")
 async def setup_alert(rule: AlertRule, db: Session = Depends(get_db)):
     print(f"[API] POST /api/alerts/setup - Adding new alert condition: '{rule.condition}'")
+    
+    # --- ArmorIQ Intercept ---
+    armoriq_result = armoriq_supervisor.evaluate_request(rule.condition, context="global")
+    if armoriq_result["status"] == "blocked":
+        return armoriq_result
+    # -------------------------
+    
     db_rule = models.AlertRuleDB(condition=rule.condition)
     db.add(db_rule)
     db.commit()
