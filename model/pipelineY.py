@@ -26,7 +26,7 @@ class OfflineVideoPipeline:
         self.collection = self.chroma_client.get_or_create_collection(name=collection_name)
         
         self.vlm_client = genai.Client(api_key=api_key)
-        self.vlm_model_name = "gemini-2.5-flash" # Use stable flash model for 1500 RPM quota
+        self.vlm_model_name = "gemini-2.5-flash" # Use high-end model for complex reasoning
         self.io_pool = concurrent.futures.ThreadPoolExecutor(max_workers=8)
         
         self.ai_queue = queue.Queue(maxsize=128)
@@ -147,7 +147,7 @@ class OfflineVideoPipeline:
         if collection_name is None:
             collection_name = "live_cctv_stream" if is_stream else "uploaded_vault"
 
-    def find_suspect_by_image(self, suspect_image_path, top_k=5, min_timestamp=None, text_query=None):
+    def find_suspect_by_image(self, suspect_image_path, top_k=5, min_timestamp=None, text_query=None, is_stream=False):
         """
         Multi-Modal Reverse Image Search Kernel!
         Fuses visual identity from a mugshot with a text-based context (e.g. 'carrying a bag').
@@ -179,7 +179,9 @@ class OfflineVideoPipeline:
         if min_timestamp is not None:
             where_filter = {"timestamp": {"$gte": min_timestamp}}
 
-        results = self.collection.query(
+        collection_name = "live_cctv_stream" if is_stream else "uploaded_vault"
+        col = self.chroma_client.get_or_create_collection(name=collection_name)
+        results = col.query(
             query_embeddings=[query_features.cpu().tolist()[0]], 
             n_results=top_k,
             where=where_filter 
@@ -295,7 +297,7 @@ class OfflineVideoPipeline:
             "all_matches": valid_frames
         }
 
-    def track_timeline(self, text_query, top_k=20, max_distance=2.0):
+    def track_timeline(self, text_query, top_k=20, max_distance=2.0, is_stream=False):
         """
         Detective Mode: Maps an object's complete chronological 
         history across all ingested video feeds and compresses it into a Timeline.
@@ -308,7 +310,9 @@ class OfflineVideoPipeline:
             features = self.model.encode_text(text_input)
             features /= features.norm(dim=-1, keepdim=True)
             
-        results = self.collection.query(
+        collection_name = "live_cctv_stream" if is_stream else "uploaded_vault"
+        col = self.chroma_client.get_or_create_collection(name=collection_name)
+        results = col.query(
             query_embeddings=[features.cpu().tolist()[0]], 
             n_results=top_k,
             include=['metadatas', 'distances'] 
