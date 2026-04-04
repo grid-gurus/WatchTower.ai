@@ -2,11 +2,9 @@
 pipeline.py — WatchTower.ai Unified ML Engine
 ==============================================
 Merges:
-  ✅ Your CUDA/OpenMP acceleration (VRAM preprocessing, cosine search, entropy gate)
-  ✅ Teammate's backend contract (collection routing, on_frame callback, ai_queue worker,
-     multimodal fusion, source_id filters, file-existence guards, fresh-start cleanup)
-  ✅ find_suspect_by_image now fully CUDA-accelerated with multimodal vector fusion kernel
-  ✅ All IO-bound VLM calls cached and images resized before send (quota saving)
+  CUDA/OpenMP acceleration (VRAM preprocessing, cosine search, entropy gate)
+  find_suspect_by_image now fully CUDA-accelerated with multimodal vector fusion kernel
+  All IO-bound VLM calls cached and images resized before send (quota saving)
 
 RTX 3000 series (Ampere sm_86) tuning preserved throughout.
 """

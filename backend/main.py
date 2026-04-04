@@ -34,6 +34,7 @@ from backend.superplane_client import superplane
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from model.pipelineY import OfflineVideoPipeline
+from backend.armoriq import armoriq_supervisor
 
 # =====================================================================
 # WEBSOCKET MANAGER
@@ -76,14 +77,14 @@ app.add_middleware(
 
 base_dir = os.path.dirname(os.path.abspath(__file__))
 env_path = os.path.join(os.path.dirname(base_dir), ".env")
-dotenv.load_dotenv(env_path)
+dotenv.load_dotenv(env_path, override=True)
 
 api_key = os.getenv("GEMINI_API_KEY")
 
 if not api_key:
     print("❌ CRITICAL ERROR: GEMINI_API_KEY could not be loaded!")
 else:
-    print(f"✅ [Backend] GEMINI_API_KEY loaded successfully. (Starts with: {api_key[:4]}...)")
+    print(f"✅ [Backend] GEMINI_API_KEY loaded successfully. (Ends with: ...{api_key[-4:]})")
 
 TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
 TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")
@@ -419,6 +420,12 @@ async def manual_query(req: QueryRequest, db: Session = Depends(get_db)):
         if not source_id:
              return {"status": "error", "message": "No active video or stream found."}
              
+        # --- ArmorIQ Intercept ---
+        armoriq_result = armoriq_supervisor.evaluate_request(req.query, context=source_id)
+        if armoriq_result["status"] == "blocked":
+            return armoriq_result
+        # -------------------------
+             
         is_live = source_id in active_stream_info and active_stream_info[source_id].startswith("http")
         print(f"🕵️ [Manual Query] Searching '{req.query}' in {'LIVE' if is_live else 'UPLOADS'} (Source: {source_id})")
         
@@ -443,12 +450,21 @@ async def detective_trace(req: QueryRequest, db: Session = Depends(get_db)):
     This is for cross-camera lineage tracking.
     """
     print(f"[API] POST /api/trace - Detective trace initiated for: '{req.query}'")
+    
+    # --- ArmorIQ Intercept ---
+    armoriq_result = armoriq_supervisor.evaluate_request(req.query, context="global")
+    if armoriq_result["status"] == "blocked":
+        return armoriq_result
+    # -------------------------
+    
     if not ml_engine:
         return {"status": "error", "message": "ML Engine not loaded. Cannot perform trace."}
         
     try:
+        source_id = last_active_source.value
+        is_live = source_id in active_stream_info and active_stream_info[source_id].startswith("http")
         # Pass the query to the Detective Trace engine
-        result = ml_engine.track_timeline(req.query)
+        result = ml_engine.track_timeline(req.query, is_stream=is_live)
         
         # We can also save this to history if needed, but for now we'll just return it
         return result
@@ -471,6 +487,14 @@ async def visual_suspect_search(
     Now supports situational context (e.g. 'Find this person holding a laptop').
     """
     print(f"[API] POST /api/search-image - Searching image '{file.filename}' with context: '{query}'")
+    
+    # --- ArmorIQ Intercept ---
+    if query:
+        armoriq_result = armoriq_supervisor.evaluate_request(query, context="global")
+        if armoriq_result["status"] == "blocked":
+            return armoriq_result
+    # -------------------------
+    
     if not ml_engine:
         return {"status": "error", "message": "ML Engine not loaded. Cannot perform visual search."}
         
@@ -485,7 +509,9 @@ async def visual_suspect_search(
             shutil.copyfileobj(file.file, buffer)
             
         # 🕵️ Call the ML "Reverse Image" Kernel (Now with text fusion!)
-        result = ml_engine.find_suspect_by_image(img_path, text_query=query)
+        source_id = last_active_source.value
+        is_live = source_id in active_stream_info and active_stream_info[source_id].startswith("http")
+        result = ml_engine.find_suspect_by_image(img_path, text_query=query, is_stream=is_live)
         
         return result
         
@@ -513,6 +539,13 @@ async def manual_speak(req: SpeakRequest):
 @app.post("/api/alerts/setup")
 async def setup_alert(rule: AlertRule, db: Session = Depends(get_db)):
     print(f"[API] POST /api/alerts/setup - Adding new alert condition: '{rule.condition}'")
+    
+    # --- ArmorIQ Intercept ---
+    armoriq_result = armoriq_supervisor.evaluate_request(rule.condition, context="global")
+    if armoriq_result["status"] == "blocked":
+        return armoriq_result
+    # -------------------------
+    
     db_rule = models.AlertRuleDB(condition=rule.condition)
     db.add(db_rule)
     db.commit()
@@ -669,6 +702,7 @@ async def background_alert_daemon():
                                     f"🚨 SECURITY ALERT 🚨\n\nRule: '{rule_text}'\n🔎 AI Notes: {new_log.ai_analysis}",
                                     result.get("frame_path")
                                 )
+
                                 
                                 await notifier.broadcast({
                                     "type": "NEW_ALERT", "rule": rule_text,
@@ -726,22 +760,50 @@ def clean_text_for_speech(text: str) -> str:
 
 def speak_alarm(phrase: str):
     """
-    Universal Text-to-speech alarm using pyttsx3 (Windows, Mac, Linux).
+    Text-to-speech alarm using high-quality ElevenLabs API.
+    If the API fails (no credit, no internet), instantly falls back to pyttsx3.
     Runs in a background thread to prevent UI freezing.
     """
     def _speak():
         try:
-            import pyttsx3
+            import os
             # Clean the phrase before speaking
             clean_phrase = clean_text_for_speech(phrase)
             
+            # --- Primary Engine: ElevenLabs ---
+            eleven_key = os.getenv("ELEVENLABS_API_KEY")
+            if eleven_key:
+                from elevenlabs.client import ElevenLabs
+                from elevenlabs.play import play
+                
+                try:
+                    print("🎧 [Voice Engine] Attempting ElevenLabs API...")
+                    client = ElevenLabs(api_key=eleven_key)
+                    audio = client.text_to_speech.convert(
+                        # Voice ID "JBFqnCBcs681mvg0GPOe" is a good authoritative default, 
+                        # but we can use the library's default by not asserting a specific complex ID if unsure.
+                        # Using 'Roger' (CwhRBWXzGAHq8TQ4Fs17) - Authoritative voice
+                        voice_id="CwhRBWXzGAHq8TQ4Fs17", 
+                        text=clean_phrase,
+                        model_id="eleven_multilingual_v2",
+                    )
+                    play(audio)
+                    print("✅ [Voice Engine] ElevenLabs play complete.")
+                    return  # Exit early since ElevenLabs succeeded
+                except Exception as eval_err:
+                    print(f"⚠️ [Voice Engine] ElevenLabs failed ({eval_err}). Falling back to Robot Voice...")
+            
+            # --- Fallback Engine: pyttsx3 ---
+            print("🤖 [Voice Engine] Using offline pyttsx3.")
+            import pyttsx3
             engine = pyttsx3.init()
             engine.setProperty('rate', 160) 
             engine.say(clean_phrase)
             engine.runAndWait()
             engine.stop()
+            
         except Exception as e:
-            print(f"Voice Engine Error: {e}")
+            print(f"❌ Voice Engine Critical Error: {e}")
 
     threading.Thread(target=_speak, daemon=True).start()
 
