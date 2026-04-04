@@ -27,11 +27,12 @@ from backend.auth import (
     TokenResponse,
     TokenRequest
 )
-
+from backend.superplane_client import superplane
 # =====================================================================
 # 1. SETUP & ALIGNMENT WITH ML TEAMMATE
 # =====================================================================
-sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from model.pipelineY import OfflineVideoPipeline
 
 # =====================================================================
@@ -129,7 +130,8 @@ def get_db():
     finally:
         db.close()
 
-def get_current_user(request_authorization: Optional[str] = None, db: Session = Depends(get_db)) -> models.User:
+def get_current_user(request_authorization: Optional[str] = Header(None, alias="Authorization"), db: Session = Depends(get_db)) -> models.User:
+#def get_current_user(request_authorization: Optional[str] = None, db: Session = Depends(get_db)) -> models.User:
     token = None
     if request_authorization and request_authorization.startswith("Bearer "):
         token = request_authorization[7:]
@@ -553,6 +555,69 @@ async def get_query_history(db: Session = Depends(get_db)):
 # =====================================================================
 # 5. THE BACKGROUND DAEMON LOOP
 # =====================================================================
+
+async def background_alert_daemon():
+    while True:
+        db = SessionLocal()
+        try:
+            active_rules_count = db.query(models.AlertRuleDB).filter(models.AlertRuleDB.is_active == True).count()
+            if active_rules_count == 0:
+                db.close(); await asyncio.sleep(5); continue
+
+            active_rules = db.query(models.AlertRuleDB).filter(models.AlertRuleDB.is_active == True).all()
+            for rule_db in active_rules:
+                rule_text = rule_db.condition
+                
+                if ml_engine:
+                    try:
+                        search_bound = time.time() - 30.0
+                        result = ml_engine.query(rule_text, is_stream=True, min_timestamp=search_bound)
+                        
+                        if result.get("status") != "error":
+                            ai_response = result.get("response", "").lower()
+                            
+                            if "yes" in ai_response or "match found" in ai_response:
+                                current_cam = result.get("source_id")
+                                last_seen_cam = global_suspect_tracker.get(rule_text)
+                                
+                                # === STATE 1: INITIAL DISCOVERY ===
+                                if last_seen_cam is None:
+                                    print(f"🚨 [NEW THREAT DETECTED] -> {rule_text} @ {current_cam}")
+                                    global_suspect_tracker[rule_text] = current_cam
+                                    
+                                    # Alert SuperPlane to spin up Jira/Incidents
+                                    superplane.alert_anomaly_spotted(
+                                        rule_condition=rule_text, source_camera=current_cam,
+                                        ai_analysis=result.get("response", "Matched."),
+                                        image_url=result.get("frame_path")
+                                    )
+                                    
+                                    os.system(f'say "Intruder Alert. Security breach at {current_cam}!" &')
+                                
+                                # === STATE 2: TARGET MOVING ACROSS CAMERAS ===
+                                elif current_cam != last_seen_cam:
+                                    print(f"🚁 [LIVE OVERWATCH] Target {rule_text} transitioned: {last_seen_cam} -> {current_cam}")
+                                    
+                                    # Tell SuperPlane to ping Telegram with the location change
+                                    superplane.alert_suspect_tracking(
+                                        suspect_profile=rule_text, 
+                                        new_camera_id=current_cam, 
+                                        old_camera_id=last_seen_cam
+                                    )
+                                    
+                                    global_suspect_tracker[rule_text] = current_cam
+                                    os.system(f'say "Update. Target shifted from {last_seen_cam} to {current_cam}!" &')
+                                
+                                # WE DO NOT DEACTIVATE THE RULE (rule_db.is_active = False)
+                                # Keep it True so we track the attacker infinitely across the facility!
+                    except Exception as e:
+                         print(f"🛑 [Daemon] Skynet override failed: {e}")
+        finally:
+            db.close()
+            
+        await asyncio.sleep(10) # Polling hyper-fast every 5s for military-grade live tracking
+
+"""
 async def background_alert_daemon():
     while True:
         db = SessionLocal()
@@ -584,7 +649,9 @@ async def background_alert_daemon():
                             ai_response = result.get("response", "").lower()
                             print(f"[Daemon DEBUG] Raw AI Response for '{rule_text}': {ai_response}")
                             
-                            if "yes" in ai_response or "match found" in ai_response:
+                            
+                            confirmation_words = ["yes","confirmed","verified","true"]
+                            if any(f" {word} " in f" {ai_response} " for word in confirmation_words):
                                 print(f"✅ [Daemon DEBUG] MATCH FOUND for rule: {rule_text}")
                                 # now = time.time()
                                 # last_fired = rule_last_triggered.get(rule_db.id, 0)
@@ -630,6 +697,9 @@ async def background_alert_daemon():
                 
         # Wait 10 seconds before doing it all again (Reduced for faster demo)
         await asyncio.sleep(10)
+"""
+
+
 
 @app.on_event("startup")
 async def startup_event():
@@ -674,3 +744,4 @@ def speak_alarm(phrase: str):
             print(f"Voice Engine Error: {e}")
 
     threading.Thread(target=_speak, daemon=True).start()
+
