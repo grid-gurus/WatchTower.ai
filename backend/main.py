@@ -17,7 +17,7 @@ from typing import Optional, List
 import dotenv
 
 # Import authentication utilities
-from backend.auth import (
+from auth import (
     hash_password, 
     verify_password, 
     create_tokens,
@@ -117,8 +117,8 @@ else:
 # =====================================================================
 # 2. REAL SQLITE DATABASE SETUP
 # =====================================================================
-from backend.database import engine, SessionLocal
-import backend.models as models
+from database import engine, SessionLocal
+import models as models
 
 models.Base.metadata.create_all(bind=engine)
 

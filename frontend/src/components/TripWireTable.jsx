@@ -2,37 +2,58 @@ export default function TripWireTable({ alerts, telegramHandle }) {
     return (
         <div className="space-y-4">
 
+            {/* Empty State */}
             {alerts.length === 0 && (
-                <p className="text-gray-500 text-center">
-                    No active alerts yet.
-                </p>
+                <div className="border border-cyan-400/20 bg-[#0a0a0f] p-6 text-center">
+                    <p className="text-[10px] tracking-[0.3em] text-cyan-400 mb-2">
+                        NO ACTIVE RULES
+                    </p>
+                    <p className="text-gray-500 text-sm">
+                        Surveillance system is idle. No alerts configured.
+                    </p>
+                </div>
             )}
 
+            {/* Alerts */}
             {alerts.map((alert) => (
                 <div
                     key={alert.id}
-                    className="p-6 rounded-xl bg-white/[0.03] backdrop-blur border border-white/10 hover:border-purple-400 transition"
+                    className="relative border border-cyan-400/20 bg-[#0a0a0f] p-5 transition hover:border-cyan-400/50"
                 >
-                    <div className="flex justify-between items-center">
 
-                        <p className="text-gray-200">{alert.text}</p>
+                    {/* Left indicator */}
+                    <div className="absolute left-0 top-0 h-full w-[2px] bg-cyan-400" />
 
-                        <span className="text-green-400 animate-pulse text-sm">
-                            🟢 Active
+                    {/* Top Row */}
+                    <div className="flex justify-between items-center gap-4">
+
+                        <div>
+                            <p className="text-[10px] tracking-[0.3em] text-cyan-400 mb-1">
+                                RULE ACTIVE
+                            </p>
+
+                            <p className="text-white text-sm font-medium">
+                                {alert.text}
+                            </p>
+                        </div>
+
+                        <span className="flex items-center gap-2 text-green-400 text-xs tracking-wide">
+                            <span className="w-2 h-2 bg-green-400 rounded-full animate-pulse" />
+                            ACTIVE
                         </span>
 
                     </div>
 
-                    <p className="text-sm text-gray-400 mt-2">
-                        Routing notifications to{" "}
-                        <span className="text-cyan-400">
+                    {/* Routing Info */}
+                    <div className="mt-4 border-t border-white/5 pt-3 text-xs text-gray-400 tracking-wide">
+                        ROUTE →
+                        <span className="ml-2 text-cyan-400 font-mono">
                             {telegramHandle}
                         </span>
-                    </p>
+                    </div>
 
                 </div>
             ))}
-
         </div>
     );
 }

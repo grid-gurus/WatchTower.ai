@@ -11,116 +11,105 @@ export default function Dashboard() {
   const [mediaMode, setMediaMode] = useState(false);
 
   const addNotification = useAlertStore((s) => s.addNotification);
-
-  // 🔥 Prevent duplicate alerts
   const lastAlertRef = useRef(null);
 
-  // // 🚨 ALERT POLLING
-  //   useEffect(() => {
-  //     const interval = setInterval(async () => {
-  //       try {
-  //         const res = await axios.post(
-  //           "http://localhost:8000/api/alerts/setup"
-  //         );
-
-  //         if (res.data.triggered) {
-  //           const alertMsg = res.data.alert?.condition;
-
-  //           // ✅ Avoid duplicate spam
-  //           if (alertMsg && alertMsg !== lastAlertRef.current) {
-  //             lastAlertRef.current = alertMsg;
-
-  //             addNotification({
-  //               message: alertMsg,
-  //               time: new Date().toLocaleTimeString(),
-  //             });
-  //           }
-  //         }
-
-  //       } catch (err) {
-  //         console.error(err);
-  //       }
-  //     }, 5000); // every 5 sec
-
-  //   return () => clearInterval(interval);
-  // }, []);
-
   return (
-    <div className="min-h-screen bg-gradient-to-br from-[#000000] via-[#020617] to-[#000000] text-white overflow-x-hidden relative">
+    <div className="min-h-screen bg-[#050816] text-white overflow-x-hidden relative">
 
-      {/* 🌌 Glow Background */}
-      <div className="fixed top-[-120px] left-[-120px] w-[500px] h-[500px] bg-cyan-400 opacity-15 blur-[200px] rounded-full"></div>
-      <div className="fixed bottom-[-120px] right-[-120px] w-[500px] h-[500px] bg-purple-500 opacity-15 blur-[200px] rounded-full"></div>
-      <div className="fixed top-[40%] left-[30%] w-[300px] h-[300px] bg-indigo-500 opacity-10 blur-[180px] rounded-full"></div>
+      {/* 🔥 Grid Background */}
+      <div
+        className="fixed inset-0 opacity-20"
+        style={{
+          backgroundImage:
+            "linear-gradient(rgba(0,212,255,0.05) 1px, transparent 1px), linear-gradient(90deg, rgba(0,212,255,0.05) 1px, transparent 1px)",
+          backgroundSize: "28px 28px",
+        }}
+      />
+
+      {/* Scanlines */}
+      <div
+        className="fixed inset-0 opacity-10"
+        style={{
+          background:
+            "repeating-linear-gradient(0deg, rgba(0,0,0,0.2), rgba(0,0,0,0.2) 1px, transparent 1px, transparent 2px)",
+        }}
+      />
+
+      {/* Glow */}
+      <div className="fixed top-[-120px] left-[-120px] w-[400px] h-[400px] bg-cyan-400 opacity-10 blur-[180px] rounded-full"></div>
+      <div className="fixed bottom-[-120px] right-[-120px] w-[400px] h-[400px] bg-purple-500 opacity-10 blur-[180px] rounded-full"></div>
 
       {/* Navbar */}
       <Navbar />
-
-      {/* Extra Glow */}
-      <div className="absolute inset-0 pointer-events-none">
-        <div className="absolute top-[-120px] left-[-120px] w-[450px] h-[450px] bg-cyan-500 opacity-10 blur-[160px] rounded-full"></div>
-        <div className="absolute bottom-[-120px] right-[-120px] w-[450px] h-[450px] bg-purple-500 opacity-10 blur-[160px] rounded-full"></div>
-      </div>
 
       {/* Main Layout */}
       <div className="relative z-10 flex h-[calc(100vh-80px)] px-4 md:px-6 pt-24 gap-4">
 
         {/* LEFT PANEL */}
-        <div className="flex-1 min-w-0 p-[1.5px] rounded-xl bg-gradient-to-r from-cyan-400 to-purple-500 shadow-lg shadow-cyan-500/10">
+        <div className="flex-1 min-w-0 border border-cyan-400/20 bg-[#0a0a0f] flex flex-col">
 
-          <div className="h-full bg-black rounded-xl flex flex-col">
-
-            {/* Header */}
-            <div className="px-4 py-3 border-b border-white/10 flex justify-between items-center">
-              <span className="text-sm text-gray-400">
-                🧠 AI Query Interface
-              </span>
-
-              <button
-                onClick={() => setMediaMode(!mediaMode)}
-                className="text-xs text-cyan-400 hover:underline"
-              >
-                {mediaMode
-                  ? "Switch to CCTV Mode"
-                  : "Switch to Media Mode"}
-              </button>
+          {/* Header */}
+          <div className="px-5 py-4 border-b border-cyan-400/10 flex justify-between items-center">
+            <div>
+              <p className="text-[10px] tracking-[0.3em] text-cyan-400">
+                QUERY MODULE
+              </p>
+              <h2 className="text-sm text-white font-semibold">
+                AI Intelligence Panel
+              </h2>
             </div>
 
-            {/* Content */}
-            <div className="flex-1 overflow-hidden">
-              {mediaMode ? <UploadDropzone /> : <ChatPanel />}
-            </div>
+            <button
+              onClick={() => setMediaMode(!mediaMode)}
+              className="text-xs text-cyan-400 border border-cyan-400/20 px-3 py-1 hover:bg-cyan-400/10 transition"
+            >
+              {mediaMode ? "CCTV MODE" : "MEDIA MODE"}
+            </button>
+          </div>
 
+          {/* Content */}
+          <div className="flex-1 overflow-hidden">
+            {mediaMode ? <UploadDropzone /> : <ChatPanel />}
           </div>
         </div>
 
         {/* RIGHT PANEL */}
-        <div className="flex-1 min-w-0 p-[1.5px] rounded-xl bg-gradient-to-r from-cyan-400 to-purple-500 shadow-lg shadow-purple-500/10">
+        <div className="flex-1 min-w-0 border border-purple-400/20 bg-[#0a0a0f] flex flex-col">
 
-          <div className="h-full bg-black rounded-xl flex flex-col">
-
-            {/* Header */}
-            <div className="px-4 py-3 border-b border-white/10 flex justify-between items-center">
-              <span className="text-sm text-gray-400">
-                📹 {mediaMode
-                  ? "Uploaded Video"
-                  : "Smart Video Feed"}
-              </span>
-
-              <span className="text-xs text-green-400 animate-pulse">
-                ● LIVE
-              </span>
+          {/* Header */}
+          <div className="px-5 py-4 border-b border-purple-400/10 flex justify-between items-center">
+            <div>
+              <p className="text-[10px] tracking-[0.3em] text-purple-400">
+                VIDEO MODULE
+              </p>
+              <h2 className="text-sm text-white font-semibold">
+                {mediaMode ? "Uploaded Feed" : "Live Surveillance"}
+              </h2>
             </div>
 
-            {/* Video */}
-            <div className="flex-1 flex items-center justify-center overflow-hidden">
-              {/* <VideoPlayer /> */}
-              <FramePlayer />
-            </div>
+            <span className="text-xs text-green-400 animate-pulse">
+              ● LIVE
+            </span>
+          </div>
 
+          {/* Video Area */}
+          <div className="flex-1 flex items-center justify-center overflow-hidden relative">
+
+            {/* subtle overlay frame */}
+            <div className="absolute inset-0 border border-cyan-400/10 pointer-events-none"></div>
+
+            {/* player */}
+            <FramePlayer />
+            {/* <VideoPlayer /> */}
           </div>
         </div>
+      </div>
 
+      {/* Bottom system status */}
+      <div className="fixed bottom-0 left-0 w-full border-t border-cyan-400/10 bg-black/60 backdrop-blur px-6 py-2 flex justify-between text-[10px] text-slate-500 font-mono tracking-widest">
+        <span>SYSTEM: ACTIVE</span>
+        <span>AI_MODEL: VIDEO-RAG</span>
+        <span>STREAM: RUNNING</span>
       </div>
     </div>
   );

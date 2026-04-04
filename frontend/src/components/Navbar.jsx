@@ -16,8 +16,7 @@ export default function Navbar() {
   const [alertLogs, setAlertLogs] = useState([]);
   const [alertLogsLoading, setAlertLogsLoading] = useState(false);
   const [alertLogsError, setAlertLogsError] = useState("");
-  
-  // -- NEW: Active Alert Rules (The ones the AI is currently watching for) --
+
   const [activeRules, setActiveRules] = useState([]);
   const [activeRulesLoading, setActiveRulesLoading] = useState(false);
   const [showActiveRules, setShowActiveRules] = useState(false);
@@ -71,7 +70,6 @@ export default function Navbar() {
 
   useEffect(() => {
     const fetchHistory = async () => {
-      // If sidebar is open but user is not logged in, keep it empty
       if (!sidebarOpen || !isLoggedIn) {
         setHistory([]);
         setHistoryLoading(false);
@@ -147,8 +145,7 @@ export default function Navbar() {
 
     fetchAlertLogs();
   }, [open, isLoggedIn]);
-  
-  // -- NEW: Fetch Active Alert Rules --
+
   const fetchActiveRules = async () => {
     if (!isLoggedIn) return;
     setActiveRulesLoading(true);
@@ -175,7 +172,6 @@ export default function Navbar() {
         method: "DELETE"
       });
       if (res.ok) {
-        // Refresh the list
         fetchActiveRules();
       }
     } catch (err) {
@@ -185,7 +181,6 @@ export default function Navbar() {
 
   const handleClearNotifications = async () => {
     try {
-      // PERMANENT PURGE: Wipe from Database so they don't return on refresh
       const token = localStorage.getItem("access_token");
       const res = await fetch("http://127.0.0.1:8000/api/alerts/logs/purge", {
         method: "DELETE",
@@ -195,8 +190,8 @@ export default function Navbar() {
       });
 
       if (res.ok) {
-        clearNotifications(); // Clear Zustand store
-        setAlertLogs([]);    // Clear local component state
+        clearNotifications();
+        setAlertLogs([]);
         console.log("🔥 Notifications purged from DB successfully.");
       }
     } catch (err) {
@@ -222,7 +217,6 @@ export default function Navbar() {
 
   const handleLogout = async () => {
     try {
-      // Call backend logout endpoint
       const token = localStorage.getItem("access_token");
       if (token) {
         await fetch("http://127.0.0.1:8000/api/auth/logout", {
@@ -235,328 +229,460 @@ export default function Navbar() {
     } catch (err) {
       console.error("Logout request failed:", err);
     } finally {
-      // Clear all auth tokens and data
       localStorage.removeItem("access_token");
       localStorage.removeItem("refresh_token");
       localStorage.removeItem("user_id");
       localStorage.removeItem("email");
       setIsLoggedIn(false);
       setShowLogoutConfirm(false);
-      
-      // Dispatch event to sync auth state
       window.dispatchEvent(new Event("auth-changed"));
-      
-      // Redirect to home
       navigate("/");
     }
   };
 
   return (
     <>
-      <div className="fixed top-0 w-full z-50">
-        {/* Background */}
-        <div className="absolute inset-0 bg-gradient-to-r from-black via-zinc-900 to-black opacity-95 backdrop-blur-xl"></div>
+      <div className="fixed top-0 z-50 w-full">
+        <div className="relative overflow-visible border-b border-[#00d4ff]/10 bg-[#131318]/90 backdrop-blur-md">
+          <div
+            className="pointer-events-none absolute inset-0 opacity-30"
+            style={{
+              backgroundImage:
+                "linear-gradient(rgba(0, 212, 255, 0.03) 1px, transparent 1px), linear-gradient(90deg, rgba(0, 212, 255, 0.03) 1px, transparent 1px)",
+              backgroundSize: "24px 24px",
+            }}
+          />
+          <div
+            className="pointer-events-none absolute inset-0 opacity-20"
+            style={{
+              background:
+                "repeating-linear-gradient(0deg, rgba(0,0,0,0.12), rgba(0,0,0,0.12) 1px, transparent 1px, transparent 2px)",
+            }}
+          />
+          <div className="pointer-events-none absolute bottom-0 left-0 h-px w-full bg-gradient-to-r from-transparent via-cyan-400 to-transparent opacity-70" />
 
-        {/* Glow Line */}
-        <div className="absolute bottom-0 left-0 w-full h-[2px] bg-gradient-to-r from-transparent via-cyan-400 to-purple-500 opacity-40"></div>
-
-        <div className="relative max-w-7xl mx-auto grid grid-cols-3 items-center px-4 md:px-8 py-4 gap-4">
-          {/* Left: Menu + Logo */}
-          <div className="flex items-center justify-start gap-3">
-            <button
-              onClick={() => setSidebarOpen(true)}
-              className="p-[1.5px] rounded-lg bg-gradient-to-r from-cyan-400 to-purple-500 hover:scale-105 transition"
-              aria-label="Open history sidebar"
-            >
-              <div className="w-10 h-10 rounded-lg bg-black flex items-center justify-center text-white">
-                <Menu size={20} />
-              </div>
-            </button>
-
-            <h1 className="text-xl md:text-2xl font-bold bg-gradient-to-r from-cyan-400 via-blue-500 to-purple-500 bg-clip-text text-transparent shrink-0">
-              CCTV AI
-            </h1>
-          </div>
-
-          {/* Center Navigation */}
-          <div className="hidden md:flex items-center justify-center gap-8 lg:gap-12 text-base lg:text-lg font-semibold tracking-wide whitespace-nowrap">
-            {location.pathname !== "/" && (
-              <Link
-                to="/"
-                className="bg-gradient-to-r from-white to-gray-400 bg-clip-text text-transparent hover:from-cyan-400 hover:to-purple-500 transition"
-              >
-                Home
-              </Link>
-            )}
-            {location.pathname !== "/dashboard" && (
-              <Link
-                to="/dashboard"
-                className="bg-gradient-to-r from-white to-gray-400 bg-clip-text text-transparent hover:from-cyan-400 hover:to-purple-500 transition"
-              >
-                Dashboard
-              </Link>
-            )}
-            {location.pathname !== "/tripwires" && (
-              <Link
-                to="/tripwires"
-                className="bg-gradient-to-r from-white to-gray-400 bg-clip-text text-transparent hover:from-cyan-400 hover:to-purple-500 transition"
-              >
-                Tripwires
-              </Link>
-            )}
-            {location.pathname !== "/livestream" && (
-              <Link
-                to="/livestream"
-                className="bg-gradient-to-r from-white to-gray-400 bg-clip-text text-transparent hover:from-cyan-400 hover:to-purple-500 transition"
-              >
-                Live Stream
-              </Link>
-            )}
-          </div>
-
-          {/* Right */}
-          <div className="flex items-center justify-end gap-5 shrink-0 whitespace-nowrap pr-4 md:pr-8">
-            {isLoggedIn ? (
-              <>
-                {/* --- NEW: Active Alerts Manager --- */}
-                <div className="relative">
-                  <div className="p-[1.5px] rounded-lg bg-gradient-to-r from-cyan-400 to-blue-500">
-                    <button 
-                      onClick={() => setShowActiveRules(!showActiveRules)}
-                      className="px-4 py-2 rounded-lg bg-black font-medium group flex items-center gap-2"
+          <div className="relative mx-auto max-w-7xl px-4 py-4 md:px-8">
+            {!isLoggedIn ? (
+              <div className="grid grid-cols-1 items-center gap-4 lg:grid-cols-3">
+                <div className="flex items-center justify-between gap-3">
+                  <div className="flex items-center gap-3">
+                    <button
+                      onClick={() => setSidebarOpen(true)}
+                      className="group border border-[#00d4ff]/20 bg-[#0e0e13] p-[1.5px] transition-transform duration-150 hover:scale-105"
+                      aria-label="Open history sidebar"
                     >
-                       <span className="w-2 h-2 rounded-full bg-cyan-400 animate-pulse"></span>
-                      <span className="text-white text-sm group-hover:bg-gradient-to-r group-hover:from-cyan-400 group-hover:to-blue-500 group-hover:bg-clip-text group-hover:text-transparent">
-                        Active Alerts ({activeRules.length})
-                      </span>
+                      <div className="flex h-10 w-10 items-center justify-center border border-[#00d4ff]/20 bg-black text-white transition-colors group-hover:text-[#00d4ff]">
+                        <Menu size={20} />
+                      </div>
                     </button>
+
+                    <div>
+                      <h1 className="text-xl font-black tracking-tighter text-[#00d4ff] md:text-2xl">
+                        CCTV AI
+                      </h1>
+                      <p className="mt-1 text-[10px] font-bold uppercase tracking-[0.28em] text-slate-500">
+                        Guest Interface
+                      </p>
+                    </div>
                   </div>
 
-                  {showActiveRules && (
-                    <div className="absolute right-0 mt-3 w-80 bg-black/95 backdrop-blur-xl border border-white/10 rounded-xl shadow-2xl p-5 z-[100] animate-in fade-in zoom-in duration-200">
-                      <div className="flex justify-between items-center mb-4 pb-2 border-b border-white/5">
-                        <h3 className="text-sm font-bold text-cyan-400 uppercase tracking-wider">AI Watchlist</h3>
-                        <Link to="/alerts/create" onClick={() => setShowActiveRules(false)} className="text-[10px] bg-white/10 hover:bg-white/20 px-2 py-1 rounded transition text-gray-300">+ New Rule</Link>
-                      </div>
+                  <div className="border border-cyan-400/20 bg-cyan-400/10 px-3 py-1 text-[10px] font-bold uppercase tracking-[0.25em] text-cyan-200 lg:hidden">
+                    Access Required
+                  </div>
+                </div>
 
-                      {activeRulesLoading ? (
-                        <div className="py-4 text-center text-xs text-gray-500 italic">Scanning active rules...</div>
-                      ) : activeRules.length === 0 ? (
-                        <div className="py-8 text-center">
-                          <p className="text-gray-500 text-xs">No active AI rules.</p>
-                          <Link to="/alerts/create" onClick={() => setShowActiveRules(false)} className="text-cyan-400 text-[10px] mt-2 block hover:underline">Click here to create your first alert</Link>
-                        </div>
-                      ) : (
-                        <div className="space-y-3 max-h-64 overflow-y-auto pr-1 custom-scrollbar">
-                          {activeRules.map((rule) => (
-                            <div key={rule.id} className="group p-3 rounded-lg bg-white/[0.03] border border-white/5 hover:border-cyan-400/30 transition-all flex justify-between items-center gap-3">
-                              <div className="min-w-0">
-                                <p className="text-xs text-white font-medium truncate italic">"{rule.condition}"</p>
-                                <p className="text-[10px] text-gray-500 mt-1">Status: <span className="text-green-500">Monitoring...</span></p>
-                              </div>
-                              <button 
-                                onClick={() => handleDeleteRule(rule.id)}
-                                className="p-1.5 rounded-md hover:bg-red-500/20 text-gray-500 hover:text-red-400 transition"
-                                title="Stop Monitoring"
-                              >
-                                <X size={14} />
-                              </button>
-                            </div>
-                          ))}
-                        </div>
-                      )}
-                    </div>
+                <div className="hidden items-center justify-center gap-6 rounded-none border border-white/10 bg-black/30 px-5 py-3 md:flex">
+                  {location.pathname !== "/" && (
+                    <Link
+                      to="/"
+                      className="text-xs font-bold uppercase tracking-[0.22em] text-slate-300 transition hover:text-[#00d4ff]"
+                    >
+                      Home
+                    </Link>
+                  )}
+                  {location.pathname !== "/dashboard" && (
+                    <Link
+                      to="/dashboard"
+                      className="text-xs font-bold uppercase tracking-[0.22em] text-slate-300 transition hover:text-[#00d4ff]"
+                    >
+                      Dashboard
+                    </Link>
+                  )}
+                  {location.pathname !== "/tripwires" && (
+                    <Link
+                      to="/tripwires"
+                      className="text-xs font-bold uppercase tracking-[0.22em] text-slate-300 transition hover:text-[#00d4ff]"
+                    >
+                      Tripwires
+                    </Link>
+                  )}
+                  {location.pathname !== "/livestream" && (
+                    <Link
+                      to="/livestream"
+                      className="text-xs font-bold uppercase tracking-[0.22em] text-slate-300 transition hover:text-[#00d4ff]"
+                    >
+                      Live Stream
+                    </Link>
                   )}
                 </div>
-              </>
-            ) : (
-              <>
-                {/* Login */}
-                <Link to="/login" className="shrink-0">
-                  <div className="p-[1.5px] rounded-lg bg-gradient-to-r from-cyan-400 to-purple-500">
-                    <button className="px-5 md:px-4 py-2 rounded-lg bg-black font-medium group">
-                      <span className="text-white text-sm group-hover:bg-gradient-to-r group-hover:from-cyan-400 group-hover:to-purple-500 group-hover:bg-clip-text group-hover:text-transparent">
+
+                <div className="flex items-center justify-end gap-3">
+                  <div className="mr-2 hidden border border-cyan-400/20 bg-cyan-400/10 px-3 py-2 text-[10px] font-bold uppercase tracking-[0.25em] text-cyan-200 lg:block">
+                    Access Required
+                  </div>
+
+                  <Link to="/login" className="shrink-0">
+                    <button className="group border border-[#00d4ff]/25 bg-[#0e0e13] px-5 py-2 text-sm font-medium text-white transition-transform duration-150 hover:scale-[1.02] hover:border-[#00d4ff]/60 md:px-4">
+                      <span className="bg-gradient-to-r from-white to-slate-400 bg-clip-text text-transparent group-hover:from-[#00d4ff] group-hover:to-purple-400">
                         Login
                       </span>
                     </button>
-                  </div>
-                </Link>
+                  </Link>
 
-                {/* Sign Up */}
-                <Link to="/signup" className="shrink-0">
-                  <div className="p-[1.5px] rounded-lg bg-gradient-to-r from-cyan-400 to-purple-500">
-                    <button className="px-3 md:px-4 py-2 rounded-lg bg-black font-medium group">
-                      <span className="text-white text-sm group-hover:bg-gradient-to-r group-hover:from-cyan-400 group-hover:to-purple-500 group-hover:bg-clip-text group-hover:text-transparent">
+                  <Link to="/signup" className="shrink-0">
+                    <button className="group border border-[#00d4ff]/25 bg-[#0e0e13] px-3 py-2 text-sm font-medium text-white transition-transform duration-150 hover:scale-[1.02] hover:border-[#00d4ff]/60 md:px-4">
+                      <span className="bg-gradient-to-r from-white to-slate-400 bg-clip-text text-transparent group-hover:from-[#00d4ff] group-hover:to-purple-400">
                         Sign Up
                       </span>
                     </button>
-                  </div>
-                </Link>
-              </>
-            )}
+                  </Link>
 
-            {/* Notification */}
-            <div className="relative shrink-0">
-              <div
-                onClick={handleNotificationClick}
-                className="p-[1.5px] rounded-full bg-gradient-to-r from-cyan-400 to-purple-500 cursor-pointer"
-              >
-                <div className="w-9 h-9 rounded-full bg-black flex items-center justify-center text-white hover:scale-105 transition">
-                  <Bell size={18} />
+                  <button
+                    onClick={handleNotificationClick}
+                    className="group relative border border-[#00d4ff]/25 bg-[#0e0e13] p-[1.5px] transition-transform duration-150 hover:scale-105"
+                    aria-label="Open notifications"
+                  >
+                    <div className="flex h-9 w-9 items-center justify-center border border-[#00d4ff]/20 bg-black text-white transition-colors group-hover:text-[#00d4ff]">
+                      <Bell size={18} />
+                    </div>
+                  </button>
+
+                  <button type="button" onClick={handleProfileClick} className="shrink-0">
+                    <div className="border border-[#00d4ff]/25 bg-[#0e0e13] p-[1.5px] transition-transform duration-150 hover:scale-105">
+                      <div className="flex h-9 w-9 items-center justify-center overflow-hidden border border-[#00d4ff]/20 bg-black text-white font-semibold">
+                        <span>U</span>
+                      </div>
+                    </div>
+                  </button>
                 </div>
               </div>
+            ) : (
+              <div className="grid grid-cols-3 items-center gap-4">
+                <div className="flex items-center justify-start gap-3">
+                  <button
+                    onClick={() => setSidebarOpen(true)}
+                    className="group border border-[#00d4ff]/20 bg-[#0e0e13] p-[1.5px] transition-transform duration-150 hover:scale-105"
+                    aria-label="Open history sidebar"
+                  >
+                    <div className="flex h-10 w-10 items-center justify-center border border-[#00d4ff]/20 bg-black text-white transition-colors group-hover:text-[#00d4ff]">
+                      <Menu size={20} />
+                    </div>
+                  </button>
 
-              {isLoggedIn && (alertLogs.length > 0 || notifications.length > 0) && (
-                <span className="absolute -top-1 -right-1 bg-red-500 text-[10px] min-w-5 h-5 px-1 rounded-full flex items-center justify-center">
-                  {alertLogs.length > 0 ? alertLogs.length : notifications.length}
-                </span>
-              )}
+                  <div className="leading-none">
+                    <h1 className="text-xl font-black tracking-tighter text-[#00d4ff] md:text-2xl">
+                      CCTV AI
+                    </h1>
+                    <p className="mt-1 hidden text-[10px] font-bold uppercase tracking-[0.28em] text-slate-500 md:block">
+                      Tactical Intelligence Substrate
+                    </p>
+                  </div>
+                </div>
 
-              {isLoggedIn && open && (
-                <div className="absolute right-0 mt-3 w-72 bg-black border border-white/10 rounded-xl shadow-xl p-4 space-y-3 z-50">
-                  <div className="flex justify-between items-center">
-                    <span className="text-sm text-gray-400">Notifications</span>
-                    <button
-                      onClick={handleClearNotifications}
-                      className="text-xs text-cyan-400 hover:underline"
+                <div className="hidden items-center justify-center gap-8 whitespace-nowrap text-base font-semibold tracking-wide lg:gap-12 md:flex lg:text-lg">
+                  {location.pathname !== "/" && (
+                    <Link
+                      to="/"
+                      className="border-b border-transparent bg-gradient-to-r from-white to-gray-400 bg-clip-text text-transparent transition hover:border-[#00d4ff] hover:from-[#00d4ff] hover:to-purple-400"
                     >
-                      Clear
-                    </button>
-                  </div>
-
-                  {alertLogsLoading ? (
-                    <div className="space-y-3">
-                      {[1, 2].map((i) => (
-                        <div
-                          key={i}
-                          className="h-16 rounded-lg bg-white/5 border border-white/10 animate-pulse"
-                        />
-                      ))}
-                    </div>
-                  ) : alertLogsError ? (
-                    <p className="text-red-300 text-sm">{alertLogsError}</p>
-                  ) : alertLogs.length > 0 ? (
-                    <div className="space-y-3">
-                      {alertLogs.map((item, i) => {
-                        const rawMessage =
-                          item.rule_tested ||
-                          item.message ||
-                          item.alert ||
-                          item.text ||
-                          item.title ||
-                          "Alert";
-                          
-                        // Ellipsis / Truncation for long titles
-                        const message = rawMessage.length > 25 
-                          ? rawMessage.substring(0, 25) + "..." 
-                          : rawMessage;
-
-                        const time =
-                          item.created_at ||
-                          item.timestamp ||
-                          item.time ||
-                          item.createdAt ||
-                          "";
-
-                        return (
-                          <div
-                            key={item.id || i}
-                            className="p-3 rounded-lg bg-red-500/10 border border-red-400/30"
-                          >
-                            <p className="text-white text-sm">🚨 {message}</p>
-                            {item.description && (
-                              <p className="text-xs text-gray-300 mt-1">
-                                {item.description}
-                              </p>
-                            )}
-                            {time && (
-                              <p className="text-xs text-gray-400 mt-1">
-                                {time}
-                              </p>
-                            )}
-                          </div>
-                        );
-                      })}
-                    </div>
-                  ) : notifications.length === 0 ? (
-                    <p className="text-gray-500 text-sm">No alerts yet</p>
-                  ) : (
-                      notifications.map((n, i) => {
-                        const rawMsg = n.message || "Alert";
-                        const displayMsg = rawMsg.length > 25 ? rawMsg.substring(0, 25) + "..." : rawMsg;
-                        return (
-                          <div
-                            key={i}
-                            className="p-3 rounded-lg bg-red-500/10 border border-red-400/30"
-                          >
-                            <p className="text-white text-sm" title={rawMsg}>🚨 {displayMsg}</p>
-                            <p className="text-xs text-gray-400 mt-1">{n.time}</p>
-                          </div>
-                        );
-                      })
+                      Home
+                    </Link>
+                  )}
+                  {location.pathname !== "/dashboard" && (
+                    <Link
+                      to="/dashboard"
+                      className="border-b border-transparent bg-gradient-to-r from-white to-gray-400 bg-clip-text text-transparent transition hover:border-[#00d4ff] hover:from-[#00d4ff] hover:to-purple-400"
+                    >
+                      Dashboard
+                    </Link>
+                  )}
+                  {location.pathname !== "/tripwires" && (
+                    <Link
+                      to="/tripwires"
+                      className="border-b border-transparent bg-gradient-to-r from-white to-gray-400 bg-clip-text text-transparent transition hover:border-[#00d4ff] hover:from-[#00d4ff] hover:to-purple-400"
+                    >
+                      Tripwires
+                    </Link>
+                  )}
+                  {location.pathname !== "/livestream" && (
+                    <Link
+                      to="/livestream"
+                      className="border-b border-transparent bg-gradient-to-r from-white to-gray-400 bg-clip-text text-transparent transition hover:border-[#00d4ff] hover:from-[#00d4ff] hover:to-purple-400"
+                    >
+                      Live Stream
+                    </Link>
                   )}
                 </div>
-              )}
-            </div>
 
-            {/* Profile */}
-            <button
-              type="button"
-              onClick={handleProfileClick}
-              className="shrink-0"
-            >
-              <div className="p-[1.5px] rounded-full bg-gradient-to-r from-cyan-400 to-purple-500 hover:scale-105 transition">
-                <div className="w-9 h-9 rounded-full bg-black flex items-center justify-center text-white font-semibold overflow-hidden">
-                  {userProfile?.profile_picture ? (
-                    <img src={userProfile.profile_picture} alt="Avatar" className="w-full h-full object-cover" />
-                  ) : (
-                    <span>{userProfile?.full_name ? userProfile.full_name[0].toUpperCase() : "U"}</span>
+                <div className="flex shrink-0 items-center justify-end gap-4 whitespace-nowrap pr-2 md:gap-5 md:pr-4">
+                  <div className="relative overflow-visible">
+                    <button
+                      onClick={() => setShowActiveRules(!showActiveRules)}
+                      className="group flex items-center gap-2 border border-[#00d4ff]/25 bg-[#0e0e13] px-4 py-2 text-sm font-medium text-white transition-transform duration-150 hover:scale-[1.02] hover:border-[#00d4ff]/60"
+                    >
+                      <span className="h-2 w-2 animate-pulse rounded-full bg-cyan-400 shadow-[0_0_14px_rgba(0,212,255,0.8)]" />
+                      <span className="bg-gradient-to-r from-white to-slate-400 bg-clip-text text-transparent group-hover:from-[#00d4ff] group-hover:to-purple-400">
+                        Active Alerts ({activeRules.length})
+                      </span>
+                    </button>
+
+                    {showActiveRules && (
+                      <div className="absolute right-0 top-full z-[999] mt-3 w-80 border border-white/10 bg-[#0a0a0f]/95 p-5 shadow-2xl backdrop-blur-xl animate-in fade-in zoom-in duration-200">
+                        <div className="mb-4 flex items-center justify-between border-b border-white/5 pb-2">
+                          <h3 className="text-xs font-bold uppercase tracking-[0.25em] text-cyan-400">
+                            AI Watchlist
+                          </h3>
+                          <Link
+                            to="/alerts/create"
+                            onClick={() => setShowActiveRules(false)}
+                            className="border border-white/10 bg-white/5 px-2 py-1 text-[10px] text-gray-300 transition hover:bg-white/10"
+                          >
+                            + New Rule
+                          </Link>
+                        </div>
+
+                        {activeRulesLoading ? (
+                          <div className="py-4 text-center text-xs italic text-gray-500">
+                            Scanning active rules...
+                          </div>
+                        ) : activeRules.length === 0 ? (
+                          <div className="py-8 text-center">
+                            <p className="text-xs text-gray-500">No active AI rules.</p>
+                            <Link
+                              to="/alerts/create"
+                              onClick={() => setShowActiveRules(false)}
+                              className="mt-2 block text-[10px] text-cyan-400 hover:underline"
+                            >
+                              Click here to create your first alert
+                            </Link>
+                          </div>
+                        ) : (
+                          <div className="custom-scrollbar max-h-64 space-y-3 overflow-y-auto pr-1">
+                            {activeRules.map((rule) => (
+                              <div
+                                key={rule.id}
+                                className="group flex items-center justify-between gap-3 border border-white/5 bg-white/[0.03] p-3 transition-all hover:border-cyan-400/30"
+                              >
+                                <div className="min-w-0">
+                                  <p className="truncate text-xs font-medium italic text-white">
+                                    "{rule.condition}"
+                                  </p>
+                                  <p className="mt-1 text-[10px] text-gray-500">
+                                    Status: <span className="text-green-500">Monitoring...</span>
+                                  </p>
+                                </div>
+                                <button
+                                  onClick={() => handleDeleteRule(rule.id)}
+                                  className="rounded-md p-1.5 text-gray-500 transition hover:bg-red-500/20 hover:text-red-400"
+                                  title="Stop Monitoring"
+                                >
+                                  <X size={14} />
+                                </button>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="relative shrink-0 overflow-visible">
+                    <button
+                      onClick={handleNotificationClick}
+                      className="group relative border border-[#00d4ff]/25 bg-[#0e0e13] p-[1.5px] transition-transform duration-150 hover:scale-105"
+                      aria-label="Open notifications"
+                    >
+                      <div className="flex h-9 w-9 items-center justify-center border border-[#00d4ff]/20 bg-black text-white transition-colors group-hover:text-[#00d4ff]">
+                        <Bell size={18} />
+                      </div>
+                    </button>
+
+                    {(alertLogs.length > 0 || notifications.length > 0) && (
+                      <span className="absolute -right-1 -top-1 flex h-5 min-w-5 items-center justify-center rounded-full bg-red-500 px-1 text-[10px] text-white">
+                        {alertLogs.length > 0 ? alertLogs.length : notifications.length}
+                      </span>
+                    )}
+
+                    {open && (
+                      <div className="absolute right-0 top-full z-[999] mt-3 w-80 border border-white/10 bg-[#0a0a0f]/95 p-4 shadow-2xl backdrop-blur-xl">
+                        <div className="mb-3 flex items-center justify-between">
+                          <span className="text-sm uppercase tracking-[0.2em] text-gray-400">
+                            Notifications
+                          </span>
+                          <button
+                            onClick={handleClearNotifications}
+                            className="text-xs text-cyan-400 transition hover:underline"
+                          >
+                            Clear
+                          </button>
+                        </div>
+
+                        {!isLoggedIn ? (
+                          <p className="py-6 text-center text-sm text-gray-400">
+                            Login to view alerts
+                          </p>
+                        ) : alertLogsLoading ? (
+                          <div className="space-y-3">
+                            {[1, 2].map((i) => (
+                              <div
+                                key={i}
+                                className="h-16 animate-pulse border border-white/10 bg-white/5"
+                              />
+                            ))}
+                          </div>
+                        ) : alertLogsError ? (
+                          <p className="text-sm text-red-300">{alertLogsError}</p>
+                        ) : alertLogs.length > 0 ? (
+                          <div className="space-y-3">
+                            {alertLogs.map((item, i) => {
+                              const rawMessage =
+                                item.rule_tested ||
+                                item.message ||
+                                item.alert ||
+                                item.text ||
+                                item.title ||
+                                "Alert";
+
+                              const message =
+                                rawMessage.length > 25
+                                  ? rawMessage.substring(0, 25) + "..."
+                                  : rawMessage;
+
+                              const time =
+                                item.created_at ||
+                                item.timestamp ||
+                                item.time ||
+                                item.createdAt ||
+                                "";
+
+                              return (
+                                <div
+                                  key={item.id || i}
+                                  className="border border-red-400/30 bg-red-500/10 p-3"
+                                >
+                                  <p className="text-sm text-white">🚨 {message}</p>
+                                  {item.description && (
+                                    <p className="mt-1 text-xs text-gray-300">
+                                      {item.description}
+                                    </p>
+                                  )}
+                                  {time && (
+                                    <p className="mt-1 text-xs text-gray-400">
+                                      {time}
+                                    </p>
+                                  )}
+                                </div>
+                              );
+                            })}
+                          </div>
+                        ) : notifications.length === 0 ? (
+                          <p className="text-sm text-gray-500">No alerts yet</p>
+                        ) : (
+                          notifications.map((n, i) => {
+                            const rawMsg = n.message || "Alert";
+                            const displayMsg =
+                              rawMsg.length > 25 ? rawMsg.substring(0, 25) + "..." : rawMsg;
+                            return (
+                              <div
+                                key={i}
+                                className="border border-red-400/30 bg-red-500/10 p-3"
+                              >
+                                <p className="text-sm text-white" title={rawMsg}>
+                                  🚨 {displayMsg}
+                                </p>
+                                <p className="mt-1 text-xs text-gray-400">{n.time}</p>
+                              </div>
+                            );
+                          })
+                        )}
+                      </div>
+                    )}
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={handleProfileClick}
+                    className="shrink-0"
+                  >
+                    <div className="border border-[#00d4ff]/25 bg-[#0e0e13] p-[1.5px] transition-transform duration-150 hover:scale-105">
+                      <div className="flex h-9 w-9 items-center justify-center overflow-hidden border border-[#00d4ff]/20 bg-black text-white font-semibold">
+                        {userProfile?.profile_picture && userProfile.profile_picture.trim() !== "" ? (
+                          <img
+                            src={userProfile.profile_picture}
+                            alt="Avatar"
+                            className="h-full w-full object-cover"
+                          />
+                        ) : (
+                          <span>
+                            {userProfile?.full_name?.[0]?.toUpperCase() || "U"}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  </button>
+
+                  {isLoggedIn && (
+                    <button
+                      type="button"
+                      onClick={() => setShowLogoutConfirm(true)}
+                      className="shrink-0"
+                      title="Logout"
+                    >
+                      <div className="border border-red-400/25 bg-[#0e0e13] p-[1.5px] transition-transform duration-150 hover:scale-105">
+                        <div className="flex h-9 w-9 items-center justify-center border border-red-400/20 bg-black text-white transition hover:text-red-400">
+                          <LogOut size={18} />
+                        </div>
+                      </div>
+                    </button>
                   )}
                 </div>
               </div>
-            </button>
-
-            {/* Logout - Only show when logged in */}
-            {isLoggedIn && (
-              <button
-                type="button"
-                onClick={() => setShowLogoutConfirm(true)}
-                className="shrink-0"
-                title="Logout"
-              >
-                <div className="p-[1.5px] rounded-full bg-gradient-to-r from-red-400 to-pink-500 hover:scale-105 transition">
-                  <div className="w-9 h-9 rounded-full bg-black flex items-center justify-center text-white hover:text-red-400 transition">
-                    <LogOut size={18} />
-                  </div>
-                </div>
-              </button>
             )}
           </div>
         </div>
       </div>
 
-      {/* Logout Confirmation Modal */}
       {showLogoutConfirm && (
         <div className="fixed inset-0 z-[70] flex items-center justify-center">
-          {/* Backdrop */}
           <div
             className="absolute inset-0 bg-black/70 backdrop-blur-sm"
             onClick={() => setShowLogoutConfirm(false)}
           />
 
-          {/* Modal - Minimal Design */}
-          <div className="relative z-[71] p-[1.5px] rounded-xl bg-gradient-to-r from-red-400 to-pink-500">
-            <div className="bg-black rounded-xl p-8 flex flex-col items-center">
+          <div className="relative z-[71] border border-red-400/60 bg-[#0a0a0f] p-[1.5px]">
+            <div className="flex flex-col items-center gap-4 bg-black p-8">
+              <div className="text-center">
+                <p className="text-[10px] font-bold uppercase tracking-[0.3em] text-red-400">
+                  Session Termination
+                </p>
+                <h3 className="mt-3 text-2xl font-black tracking-tight text-white">
+                  Logout now?
+                </h3>
+                <p className="mt-2 max-w-xs text-sm text-slate-400">
+                  You will be signed out and returned to the home screen.
+                </p>
+              </div>
+
               <button
                 onClick={handleLogout}
-                className="px-8 py-3 rounded-lg bg-gradient-to-r from-red-400 to-pink-500 text-white font-semibold hover:scale-105 transition mb-3"
+                className="border border-red-400/40 bg-red-500 px-8 py-3 text-sm font-semibold text-white transition-transform duration-150 hover:scale-105"
               >
                 Logout
               </button>
-              
+
               <button
                 onClick={() => setShowLogoutConfirm(false)}
-                className="p-2 rounded-lg hover:bg-white/10 transition"
+                className="rounded-md p-2 transition hover:bg-white/10"
                 title="Cancel"
               >
                 <X size={20} className="text-gray-400 hover:text-white" />
@@ -566,20 +692,16 @@ export default function Navbar() {
         </div>
       )}
 
-      {/* Sidebar Overlay */}
       {sidebarOpen && (
         <div className="fixed inset-0 z-[60]">
-          {/* Backdrop */}
           <div
             className="absolute inset-0 bg-black/70 backdrop-blur-sm"
             onClick={() => setSidebarOpen(false)}
           />
 
-          {/* Sidebar */}
-          <div className="absolute left-0 top-0 h-full w-[90%] max-w-sm bg-gradient-to-b from-[#050816] via-[#020617] to-black border-r border-white/10 shadow-2xl">
-            <div className="h-full flex flex-col">
-              {/* Header */}
-              <div className="flex items-center justify-between px-5 py-5 border-b border-white/10">
+          <div className="absolute left-0 top-0 h-full w-[90%] max-w-sm border-r border-white/10 bg-gradient-to-b from-[#050816] via-[#020617] to-black shadow-2xl">
+            <div className="flex h-full flex-col">
+              <div className="flex items-center justify-between border-b border-white/10 px-5 py-5">
                 <div>
                   <p className="text-xs uppercase tracking-[0.3em] text-cyan-400/80">
                     Activity
@@ -591,38 +713,34 @@ export default function Navbar() {
 
                 <button
                   onClick={() => setSidebarOpen(false)}
-                  className="p-[1.5px] rounded-lg bg-gradient-to-r from-cyan-400 to-purple-500 hover:scale-105 transition"
+                  className="border border-[#00d4ff]/25 bg-[#0e0e13] p-[1.5px] transition-transform duration-150 hover:scale-105"
                   aria-label="Close history sidebar"
                 >
-                  <div className="w-10 h-10 rounded-lg bg-black flex items-center justify-center text-white">
+                  <div className="flex h-10 w-10 items-center justify-center bg-black text-white">
                     <X size={20} />
                   </div>
                 </button>
               </div>
 
-              {/* Summary Card */}
               <div className="px-5 pt-5">
-                <div className="p-[1.5px] rounded-2xl bg-gradient-to-r from-cyan-400/70 to-purple-500/70">
-                  <div className="rounded-2xl bg-black/90 p-4">
-                    <div className="flex items-center gap-3">
-                      <div className="w-11 h-11 rounded-xl bg-cyan-400/10 flex items-center justify-center border border-cyan-400/20">
-                        <History size={20} className="text-cyan-300" />
-                      </div>
-                      <div>
-                        <p className="text-sm text-gray-400">Total records</p>
-                        <p className="text-2xl font-semibold text-white">
-                          {isLoggedIn ? history.length : 0}
-                        </p>
-                      </div>
+                <div className="border border-cyan-400/20 bg-[#0e0e13] p-4">
+                  <div className="flex items-center gap-3">
+                    <div className="flex h-11 w-11 items-center justify-center border border-cyan-400/20 bg-cyan-400/10 text-cyan-300">
+                      <History size={20} />
+                    </div>
+                    <div>
+                      <p className="text-sm text-gray-400">Total records</p>
+                      <p className="text-2xl font-semibold text-white">
+                        {isLoggedIn ? history.length : 0}
+                      </p>
                     </div>
                   </div>
                 </div>
               </div>
 
-              {/* List */}
               <div className="flex-1 overflow-y-auto px-5 py-5">
                 {!isLoggedIn ? (
-                  <div className="p-5 rounded-2xl bg-white/5 border border-white/10 text-gray-400 text-sm">
+                  <div className="border border-white/10 bg-white/5 p-5 text-sm text-gray-400">
                     History is available after login.
                   </div>
                 ) : historyLoading ? (
@@ -630,16 +748,16 @@ export default function Navbar() {
                     {[1, 2, 3].map((i) => (
                       <div
                         key={i}
-                        className="h-20 rounded-2xl bg-white/5 border border-white/10 animate-pulse"
+                        className="h-20 animate-pulse border border-white/10 bg-white/5"
                       />
                     ))}
                   </div>
                 ) : historyError ? (
-                  <div className="p-4 rounded-2xl bg-red-500/10 border border-red-400/30 text-red-200 text-sm">
+                  <div className="border border-red-400/30 bg-red-500/10 p-4 text-sm text-red-200">
                     {historyError}
                   </div>
                 ) : history.length === 0 ? (
-                  <div className="p-5 rounded-2xl bg-white/5 border border-white/10 text-gray-400 text-sm">
+                  <div className="border border-white/10 bg-white/5 p-5 text-sm text-gray-400">
                     No history found yet.
                   </div>
                 ) : (
@@ -669,27 +787,27 @@ export default function Navbar() {
                       return (
                         <div
                           key={item.id || index}
-                          className="p-[1.5px] rounded-2xl bg-gradient-to-r from-cyan-400/40 to-purple-500/40"
+                          className="border border-cyan-400/20 bg-[#0e0e13] p-[1.5px] transition hover:border-cyan-400/40"
                         >
-                          <div className="rounded-2xl bg-black/85 p-4 border border-white/10 hover:border-cyan-400/30 transition">
+                          <div className="border border-white/10 bg-black/85 p-4 transition hover:bg-black/95">
                             <div className="flex items-start justify-between gap-3">
                               <div className="min-w-0">
-                                <p className="text-white font-medium leading-snug break-words">
+                                <p className="break-words font-medium leading-snug text-white">
                                   {title}
                                 </p>
-                                <p className="text-sm text-gray-400 mt-1 break-words">
+                                <p className="mt-1 break-words text-sm text-gray-400">
                                   {subtitle}
                                 </p>
                               </div>
                               <div className="shrink-0">
-                                <div className="w-10 h-10 rounded-xl bg-purple-500/10 border border-purple-400/20 flex items-center justify-center text-purple-300">
+                                <div className="flex h-10 w-10 items-center justify-center border border-purple-400/20 bg-purple-500/10 text-purple-300">
                                   <Clock3 size={18} />
                                 </div>
                               </div>
                             </div>
 
                             {time && (
-                              <p className="text-xs text-gray-500 mt-3">
+                              <p className="mt-3 text-xs text-gray-500">
                                 {time}
                               </p>
                             )}

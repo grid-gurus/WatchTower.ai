@@ -82,7 +82,6 @@ export default function UploadDropzone() {
                 const res = await axios.get("http://localhost:8000/api/media/status");
 
                 if (res.data.status === "completed") {
-                    console.log(res);
                     clearInterval(interval);
                     setLoading(false);
                     setMessage("✅ Video processed successfully!");
@@ -98,11 +97,28 @@ export default function UploadDropzone() {
     };
 
     return (
-        <div className="w-full h-full flex items-center justify-center p-6 pt-10 bg-gradient-to-br from-black via-zinc-900 to-black text-white overflow-hidden relative">
-            {/* Glow */}
-            <div className="absolute top-[-80px] left-[-80px] w-64 h-64 bg-cyan-500/15 rounded-full blur-3xl pointer-events-none"></div>
-            <div className="absolute bottom-[-80px] right-[-80px] w-64 h-64 bg-purple-500/15 rounded-full blur-3xl pointer-events-none"></div>
+        <div className="w-full h-full flex items-center justify-center bg-[#050816] relative overflow-hidden">
 
+            {/* 🔥 Grid */}
+            <div
+                className="absolute inset-0 opacity-20"
+                style={{
+                    backgroundImage:
+                        "linear-gradient(rgba(0,212,255,0.05) 1px, transparent 1px), linear-gradient(90deg, rgba(0,212,255,0.05) 1px, transparent 1px)",
+                    backgroundSize: "24px 24px",
+                }}
+            />
+
+            {/* Scanlines */}
+            <div
+                className="absolute inset-0 opacity-10"
+                style={{
+                    background:
+                        "repeating-linear-gradient(0deg, rgba(0,0,0,0.2), rgba(0,0,0,0.2) 1px, transparent 1px, transparent 2px)",
+                }}
+            />
+
+            {/* Upload Box */}
             <div
                 onDragOver={(e) => {
                     e.preventDefault();
@@ -110,70 +126,71 @@ export default function UploadDropzone() {
                 }}
                 onDragLeave={() => setDragging(false)}
                 onDrop={handleDrop}
-                className={`relative z-10 w-full max-w-xl rounded-3xl p-[1.5px] transition-all duration-300 bg-gradient-to-r from-cyan-400 to-purple-500 shadow-2xl ${dragging ? "scale-[1.01]" : ""
-                    }`}
+                className={`relative z-10 w-full max-w-xl border ${dragging ? "border-cyan-400" : "border-cyan-400/20"
+                    } bg-[#0a0a0f] p-10 text-center transition`}
             >
-                <div className="rounded-3xl bg-black/95 backdrop-blur-xl border border-white/10 px-8 py-10 text-center">
-                    <div className="mb-5 inline-flex items-center gap-2 rounded-full border border-cyan-400/40 bg-cyan-400/10 px-4 py-1 text-sm text-cyan-300">
-                        <span className="inline-block h-2 w-2 rounded-full bg-cyan-400 animate-pulse"></span>
-                        Media Mode
-                    </div>
 
-                    <h2 className="text-3xl font-bold bg-gradient-to-r from-cyan-400 via-blue-500 to-purple-500 bg-clip-text text-transparent">
-                        Upload Video
-                    </h2>
+                {/* Header */}
+                <p className="text-[10px] tracking-[0.35em] text-cyan-400 mb-2">
+                    MEDIA INGESTION
+                </p>
 
-                    <p className="mt-3 text-sm text-gray-400">
-                        Drag & drop your MP4 or click to choose a file
-                    </p>
+                <h2 className="text-2xl font-bold text-white mb-4">
+                    VIDEO UPLOAD MODULE
+                </h2>
 
-                    <input
-                        type="file"
-                        accept="video/*"
-                        ref={fileInputRef}
-                        onChange={handleFileChange}
-                        className="hidden"
-                    />
+                <p className="text-sm text-gray-400 mb-8">
+                    Drag & drop surveillance footage or initialize upload
+                </p>
 
-                    <div
-                        className={`mt-8 rounded-2xl border-2 border-dashed px-6 py-10 transition-all duration-300 ${dragging
+                <input
+                    type="file"
+                    accept="video/*"
+                    ref={fileInputRef}
+                    onChange={handleFileChange}
+                    className="hidden"
+                />
+
+                {/* Dropzone */}
+                <div
+                    className={`border-2 border-dashed px-6 py-10 transition ${dragging
                             ? "border-cyan-400 bg-cyan-400/10"
-                            : "border-white/10 bg-white/[0.03]"
-                            }`}
-                    >
-                        <div className="text-5xl">🎬</div>
+                            : "border-white/10"
+                        }`}
+                >
+                    <div className="text-4xl mb-4">🎬</div>
 
-                        {loading ? (
-                            <div className="mt-6">
-                                <p className="text-cyan-400 text-lg font-medium animate-pulse">
-                                    Processing video...
-                                </p>
-                                <p className="mt-2 text-sm text-gray-400">
-                                    The backend is indexing your upload right now.
-                                </p>
-                            </div>
-                        ) : (
-                            <>
-                                <button
-                                    onClick={checkLoginAndUpload}
-                                    className="mt-6 px-6 py-3 rounded-xl bg-gradient-to-r from-cyan-400 via-blue-500 to-purple-500 text-black font-semibold shadow-lg shadow-cyan-500/20 hover:scale-105 transition"
-                                >
-                                    Upload Video
-                                </button>
-
-                                <p className="mt-4 text-sm text-gray-400">
-                                    Secure upload with login required
-                                </p>
-                            </>
-                        )}
-                    </div>
-
-                    {message && (
-                        <div className="mt-6 rounded-xl border border-white/10 bg-white/[0.04] px-4 py-3 text-sm text-gray-300">
-                            {message}
+                    {loading ? (
+                        <div>
+                            <p className="text-cyan-400 font-mono animate-pulse">
+                                PROCESSING VIDEO...
+                            </p>
+                            <p className="text-xs text-gray-500 mt-2">
+                                INDEXING FRAMES → GENERATING EMBEDDINGS → READYING QUERY
+                            </p>
                         </div>
+                    ) : (
+                        <>
+                            <button
+                                onClick={checkLoginAndUpload}
+                                className="mt-4 border border-cyan-400 bg-[#00d4ff] text-black font-bold px-6 py-3 tracking-widest hover:invert transition"
+                            >
+                                INITIATE UPLOAD
+                            </button>
+
+                            <p className="mt-4 text-xs text-gray-500">
+                                AUTH REQUIRED • SECURE CHANNEL
+                            </p>
+                        </>
                     )}
                 </div>
+
+                {/* Message */}
+                {message && (
+                    <div className="mt-6 border border-white/10 bg-white/[0.03] px-4 py-3 text-sm text-gray-300">
+                        {message}
+                    </div>
+                )}
             </div>
         </div>
     );

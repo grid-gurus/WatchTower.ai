@@ -3,7 +3,6 @@ import { useState, useRef } from "react";
 import useToastStore from "../store/useToastStore";
 
 export default function Signup() {
-
     const navigate = useNavigate();
     const addToast = useToastStore((s) => s.addToast);
 
@@ -19,11 +18,9 @@ export default function Signup() {
     const handleSignup = async (e) => {
         e.preventDefault();
 
-        // Prevent double-submit using ref (synchronous check)
         if (requestInProgressRef.current) return;
         requestInProgressRef.current = true;
 
-        // ✅ Validation
         if (!name.trim() || !email.trim() || !telegram.trim() || !password.trim() || !confirmPassword.trim()) {
             requestInProgressRef.current = false;
             addToast("Please fill in all fields", "error");
@@ -40,9 +37,7 @@ export default function Signup() {
         try {
             const res = await fetch("http://127.0.0.1:8000/api/auth/signup", {
                 method: "POST",
-                headers: {
-                    "Content-Type": "application/json"
-                },
+                headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({
                     full_name: name,
                     email: email,
@@ -55,13 +50,8 @@ export default function Signup() {
             const data = await res.json();
 
             if (res.ok) {
-                // Show success toast
-                addToast("Profile created successfully! Redirecting to login...", "success", 2000);
-
-                // Redirect to login after a short delay to let user see the toast
-                setTimeout(() => {
-                    navigate("/login");
-                }, 2100);
+                addToast("Profile created successfully! Redirecting...", "success", 2000);
+                setTimeout(() => navigate("/login"), 2100);
             } else {
                 addToast(data.message || data.detail || "Signup failed", "error");
             }
@@ -76,98 +66,92 @@ export default function Signup() {
     };
 
     return (
-        <div className="relative min-h-screen flex items-center justify-center bg-gradient-to-br from-[#000000] via-[#020617] to-[#000000] text-white overflow-hidden">
+        <div className="relative min-h-screen flex items-center justify-center bg-[#050816] text-white overflow-hidden">
+
+            {/* 🔥 Grid */}
+            <div className="absolute inset-0 opacity-20"
+                style={{
+                    backgroundImage:
+                        "linear-gradient(rgba(0,212,255,0.05) 1px, transparent 1px), linear-gradient(90deg, rgba(0,212,255,0.05) 1px, transparent 1px)",
+                    backgroundSize: "28px 28px",
+                }}
+            />
+
+            {/* Scanlines */}
+            <div className="absolute inset-0 opacity-10"
+                style={{
+                    background:
+                        "repeating-linear-gradient(0deg, rgba(0,0,0,0.2), rgba(0,0,0,0.2) 1px, transparent 1px, transparent 2px)",
+                }}
+            />
 
             {/* Glow */}
-            <div className="fixed top-[-120px] left-[-120px] w-[500px] h-[500px] bg-cyan-400 opacity-15 blur-[200px] rounded-full"></div>
-            <div className="fixed bottom-[-120px] right-[-120px] w-[500px] h-[500px] bg-purple-500 opacity-15 blur-[200px] rounded-full"></div>
-            <div className="fixed top-[40%] left-[30%] w-[300px] h-[300px] bg-indigo-500 opacity-10 blur-[180px] rounded-full"></div>
+            <div className="absolute top-[-100px] left-[-100px] w-[300px] h-[300px] bg-cyan-400 opacity-10 blur-[150px] rounded-full"></div>
+            <div className="absolute bottom-[-100px] right-[-100px] w-[300px] h-[300px] bg-purple-500 opacity-10 blur-[150px] rounded-full"></div>
 
-            <div className="relative z-10 p-[1.5px] rounded-xl bg-gradient-to-r from-cyan-400 to-purple-500">
-                <div className="bg-black p-8 rounded-xl w-[360px]">
+            {/* BOX */}
+            <div className="relative z-10 w-[380px] border border-cyan-400/20 bg-[#0a0a0f] p-8">
 
-                    <h2 className="text-2xl font-bold mb-6 text-center bg-gradient-to-r from-cyan-400 to-purple-500 bg-clip-text text-transparent">
-                        Create Account
-                    </h2>
-
-                    <form onSubmit={handleSignup} className="space-y-4">
-                        {/* Name */}
-                        <input
-                            type="text"
-                            placeholder="Full Name"
-                            value={name}
-                            required
-                            onChange={(e) => setName(e.target.value)}
-                            className="w-full p-3 bg-white/[0.05] border border-white/10 rounded-lg outline-none focus:border-cyan-400"
-                        />
-
-                        {/* Email */}
-                        <input
-                            type="email"
-                            placeholder="Email"
-                            value={email}
-                            required
-                            onChange={(e) => setEmail(e.target.value)}
-                            className="w-full p-3 bg-white/[0.05] border border-white/10 rounded-lg outline-none focus:border-cyan-400"
-                        />
-
-                        {/* Telegram Handle */}
-                        <input
-                            type="text"
-                            placeholder="Telegram Handle (e.g., @yourhandle)"
-                            value={telegram}
-                            required
-                            onChange={(e) => setTelegram(e.target.value)}
-                            className="w-full p-3 bg-white/[0.05] border border-white/10 rounded-lg outline-none focus:border-cyan-400"
-                        />
-
-                        {/* Profile Picture URL */}
-                        <input
-                            type="text"
-                            placeholder="Profile Picture URL (Online or Local)"
-                            value={profilePic}
-                            onChange={(e) => setProfilePic(e.target.value)}
-                            className="w-full p-3 bg-white/[0.05] border border-white/10 rounded-lg outline-none focus:border-cyan-400"
-                        />
-
-                        {/* Password */}
-                        <input
-                            type="password"
-                            placeholder="Password"
-                            value={password}
-                            required
-                            onChange={(e) => setPassword(e.target.value)}
-                            className="w-full p-3 bg-white/[0.05] border border-white/10 rounded-lg outline-none focus:border-cyan-400"
-                        />
-
-                        {/* Confirm Password */}
-                        <input
-                            type="password"
-                            placeholder="Confirm Password"
-                            value={confirmPassword}
-                            required
-                            onChange={(e) => setConfirmPassword(e.target.value)}
-                            className="w-full p-3 bg-white/[0.05] border border-white/10 rounded-lg outline-none focus:border-cyan-400"
-                        />
-
-                        {/* Button */}
-                        <button
-                            type="submit"
-                            disabled={loading}
-                            className="w-full py-2 rounded-lg bg-gradient-to-r from-cyan-400 to-purple-500 text-black font-semibold disabled:opacity-50 disabled:cursor-not-allowed transition"
-                        >
-                            {loading ? "Creating Account..." : "Create Account"}
-                        </button>
-                    </form>
-
-                    <p className="mt-6 text-sm text-center text-gray-400">
-                        Already have an account?
-                        <Link to="/login" className="ml-2 text-cyan-400 hover:underline">
-                            Login
-                        </Link>
+                {/* HEADER */}
+                <div className="mb-6 text-center">
+                    <p className="text-[10px] tracking-[0.35em] text-cyan-400">
+                        USER ONBOARDING
                     </p>
 
+                    <h2 className="text-2xl font-bold mt-2">
+                        CREATE ACCESS NODE
+                    </h2>
                 </div>
+
+                <form onSubmit={handleSignup} className="space-y-4">
+
+                    {/* Inputs */}
+                    {[
+                        { placeholder: "FULL NAME", value: name, setter: setName },
+                        { placeholder: "EMAIL ADDRESS", value: email, setter: setEmail, type: "email" },
+                        { placeholder: "TELEGRAM HANDLE (@...)", value: telegram, setter: setTelegram },
+                        { placeholder: "PROFILE IMAGE URL (optional)", value: profilePic, setter: setProfilePic },
+                        { placeholder: "PASSWORD", value: password, setter: setPassword, type: "password" },
+                        { placeholder: "CONFIRM PASSWORD", value: confirmPassword, setter: setConfirmPassword, type: "password" },
+                    ].map((field, i) => (
+                        <div key={i} className="border border-white/10 bg-[#0e0e13] p-3">
+                            <input
+                                type={field.type || "text"}
+                                placeholder={field.placeholder}
+                                value={field.value}
+                                onChange={(e) => field.setter(e.target.value)}
+                                className="w-full bg-transparent text-white placeholder:text-gray-500 outline-none text-sm tracking-wide"
+                                required={i !== 3} // profile pic optional
+                            />
+                        </div>
+                    ))}
+
+                    {/* Button */}
+                    <button
+                        type="submit"
+                        disabled={loading}
+                        className={`w-full border border-cyan-400 bg-[#00d4ff] text-black font-bold py-3 tracking-widest transition 
+              ${loading ? "opacity-50" : "hover:invert active:scale-95"}
+            `}
+                    >
+                        {loading ? "INITIALIZING..." : "CREATE ACCOUNT"}
+                    </button>
+
+                </form>
+
+                {/* Footer */}
+                <p className="mt-6 text-xs text-center text-gray-500">
+                    ALREADY REGISTERED?
+                    <Link to="/login" className="ml-2 text-cyan-400 hover:underline">
+                        LOGIN
+                    </Link>
+                </p>
+
+                {/* System footer */}
+                <div className="mt-6 text-[10px] text-slate-600 font-mono tracking-widest text-center">
+                    AUTH_NODE • VERIFIED_PIPELINE • AI_READY
+                </div>
+
             </div>
         </div>
     );

@@ -2,48 +2,105 @@ import { Link } from "react-router-dom";
 
 export default function LandingPage() {
   return (
-    <div className="relative min-h-screen w-full flex items-center justify-center px-4 pt-24">
-      {/* Parent Container - Flex centered */}
-      <div className="flex gap-12">
-        
-        {/* Login Option */}
-        <div className="w-full sm:w-auto p-[1.5px] rounded-2xl bg-gradient-to-r from-cyan-400 to-purple-500">
-          <div className="bg-black rounded-2xl p-8 sm:p-10 min-w-[320px] text-center">
-            <h2 className="text-2xl font-bold mb-4 text-white">
-              Already have an account?
-            </h2>
-            <p className="text-gray-400 mb-8">
-              Sign in to access your CCTV AI dashboard
-            </p>
-            <Link to="/login" className="w-full block">
-              <div className="p-[1.5px] rounded-lg bg-gradient-to-r from-cyan-400 to-purple-500">
-                <button className="w-full px-6 py-3 rounded-lg bg-black font-semibold text-white hover:bg-gradient-to-r hover:from-cyan-400 hover:to-purple-500 transition-all duration-300">
-                  Login
-                </button>
-              </div>
-            </Link>
-          </div>
+    <div className="relative min-h-screen w-full flex items-center justify-center px-4 pt-24 bg-[#050816] overflow-hidden">
+
+      {/* 🔥 Grid Background */}
+      <div
+        className="absolute inset-0 opacity-20"
+        style={{
+          backgroundImage:
+            "linear-gradient(rgba(0,212,255,0.05) 1px, transparent 1px), linear-gradient(90deg, rgba(0,212,255,0.05) 1px, transparent 1px)",
+          backgroundSize: "28px 28px",
+        }}
+      />
+
+      {/* Scanlines */}
+      <div
+        className="absolute inset-0 opacity-10"
+        style={{
+          background:
+            "repeating-linear-gradient(0deg, rgba(0,0,0,0.2), rgba(0,0,0,0.2) 1px, transparent 1px, transparent 2px)",
+        }}
+      />
+
+      {/* Glow */}
+      <div className="absolute top-[-120px] left-[-120px] w-[400px] h-[400px] bg-cyan-400 opacity-10 blur-[180px] rounded-full"></div>
+      <div className="absolute bottom-[-120px] right-[-120px] w-[400px] h-[400px] bg-purple-500 opacity-10 blur-[180px] rounded-full"></div>
+
+      {/* Content */}
+      <div className="relative z-10 flex flex-col items-center">
+
+        {/* 🔥 Heading */}
+        <div className="mb-12 text-center">
+          <p className="text-[10px] tracking-[0.35em] text-cyan-400">
+            ACCESS PORTAL
+          </p>
+
+          <h1
+            className="text-4xl md:text-6xl font-black text-white tracking-tighter"
+            style={{ textShadow: "2px 0 #ea0212, -2px 0 #00d4ff" }}
+          >
+            CCTV AI SYSTEM
+          </h1>
+
+          <p className="mt-4 text-gray-400 text-sm max-w-md">
+            Select your access level to continue into the surveillance intelligence platform
+          </p>
         </div>
 
-        {/* Signup Option */}
-        <div className="p-[1.5px] rounded-2xl bg-gradient-to-r from-green-400 to-cyan-500">
-          <div className="bg-black rounded-2xl p-8 sm:p-10 min-w-[320px] text-center">
-            <h2 className="text-2xl font-bold mb-4 text-white">
-              New user?
-            </h2>
-            <p className="text-gray-400 mb-8">
-              Create an account and join our surveillance intelligence platform
+        {/* 🔥 Cards */}
+        <div className="flex flex-col md:flex-row gap-8">
+
+          {/* LOGIN */}
+          <div className="border border-cyan-400/20 bg-[#0a0a0f] p-8 w-[320px] transition hover:border-cyan-400/50">
+
+            <p className="text-[10px] tracking-[0.3em] text-cyan-400 mb-2">
+              EXISTING USER
             </p>
-            <Link to="/signup" className="w-full block">
-              <div className="p-[1.5px] rounded-lg bg-gradient-to-r from-green-400 to-cyan-500">
-                <button className="w-full px-6 py-3 rounded-lg bg-black font-semibold text-white hover:bg-gradient-to-r hover:from-green-400 hover:to-cyan-500 transition-all duration-300">
-                  Sign Up
-                </button>
-              </div>
+
+            <h2 className="text-xl font-bold text-white mb-3">
+              LOGIN ACCESS
+            </h2>
+
+            <p className="text-sm text-gray-400 mb-6">
+              Authenticate and continue monitoring your surveillance feeds.
+            </p>
+
+            <Link to="/login">
+              <button className="w-full border border-cyan-400 bg-[#00d4ff] text-black font-bold py-3 tracking-widest hover:invert transition">
+                ENTER SYSTEM
+              </button>
             </Link>
           </div>
+
+          {/* SIGNUP */}
+          <div className="border border-purple-400/20 bg-[#0a0a0f] p-8 w-[320px] transition hover:border-purple-400/50">
+
+            <p className="text-[10px] tracking-[0.3em] text-purple-400 mb-2">
+              NEW USER
+            </p>
+
+            <h2 className="text-xl font-bold text-white mb-3">
+              CREATE ACCESS
+            </h2>
+
+            <p className="text-sm text-gray-400 mb-6">
+              Register and activate AI-powered surveillance intelligence.
+            </p>
+
+            <Link to="/signup">
+              <button className="w-full border border-purple-400 bg-purple-500 text-white font-bold py-3 tracking-widest hover:invert transition">
+                INITIALIZE
+              </button>
+            </Link>
+          </div>
+
         </div>
 
+        {/* 🔻 Bottom system text */}
+        <div className="mt-12 text-[10px] text-slate-600 font-mono tracking-widest text-center">
+          AUTH_GATEWAY • SECURE_CHANNEL • VIDEO-RAG_ENABLED
+        </div>
       </div>
     </div>
   );

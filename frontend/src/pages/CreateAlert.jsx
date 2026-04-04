@@ -28,35 +28,72 @@ export default function CreateAlert() {
     };
 
     return (
-        <div className="min-h-screen bg-gradient-to-br from-black via-zinc-900 to-black text-white">
+        <div className="min-h-screen bg-[#050816] text-white relative overflow-hidden">
+
+            {/* 🔥 Grid */}
+            <div
+                className="absolute inset-0 opacity-20"
+                style={{
+                    backgroundImage:
+                        "linear-gradient(rgba(0,212,255,0.05) 1px, transparent 1px), linear-gradient(90deg, rgba(0,212,255,0.05) 1px, transparent 1px)",
+                    backgroundSize: "28px 28px",
+                }}
+            />
+
+            {/* Scanlines */}
+            <div
+                className="absolute inset-0 opacity-10"
+                style={{
+                    background:
+                        "repeating-linear-gradient(0deg, rgba(0,0,0,0.2), rgba(0,0,0,0.2) 1px, transparent 1px, transparent 2px)",
+                }}
+            />
 
             <Navbar />
 
-            <div className="flex justify-center items-center pt-28 px-4">
+            {/* Content */}
+            <div className="relative z-10 flex justify-center items-center pt-28 px-4">
 
-                <div className="w-full max-w-2xl p-[1.5px] rounded-xl bg-gradient-to-r from-cyan-400 to-purple-500">
+                <div className="w-full max-w-2xl border border-cyan-400/20 bg-[#0a0a0f] p-8">
 
-                    <div className="bg-black rounded-xl p-8">
+                    {/* Header */}
+                    <div className="mb-6">
+                        <p className="text-[10px] tracking-[0.35em] text-cyan-400">
+                            ALERT CONFIGURATION
+                        </p>
 
-                        <h2 className="text-3xl font-bold mb-6 bg-gradient-to-r from-cyan-400 to-purple-500 bg-clip-text text-transparent">
-                            Create Alert
+                        <h2 className="text-2xl font-bold text-white mt-2">
+                            CREATE SURVEILLANCE RULE
                         </h2>
 
+                        <p className="text-sm text-gray-400 mt-2">
+                            Define a natural language condition to trigger automated alerts
+                        </p>
+                    </div>
+
+                    {/* Input */}
+                    <div className="border border-white/10 bg-[#0e0e13] p-4">
                         <textarea
                             value={condition}
                             onChange={(e) => setCondition(e.target.value)}
-                            placeholder="e.g. Someone loitering near the backdoor"
-                            className="w-full h-32 p-4 rounded-lg bg-white/[0.05] border border-white/10 outline-none focus:border-cyan-400"
+                            placeholder="e.g. Person loitering near restricted area for more than 30 seconds"
+                            className="w-full h-32 bg-transparent text-white placeholder:text-gray-500 outline-none text-sm tracking-wide resize-none"
                         />
-
-                        <button
-                            onClick={handleCreate}
-                            className="mt-6 w-full py-3 rounded-lg bg-gradient-to-r from-cyan-400 to-purple-500 text-black font-semibold"
-                        >
-                            {loading ? "Creating..." : "Create Alert"}
-                        </button>
-
                     </div>
+
+                    {/* Action */}
+                    <button
+                        onClick={handleCreate}
+                        className="mt-6 w-full border border-cyan-400 bg-[#00d4ff] text-black font-bold py-3 tracking-widest hover:invert transition active:scale-95"
+                    >
+                        {loading ? "CREATING RULE..." : "DEPLOY ALERT"}
+                    </button>
+
+                    {/* Footer */}
+                    <div className="mt-6 text-[10px] text-slate-600 font-mono tracking-widest text-center">
+                        AI_RULE_ENGINE • REALTIME_MONITORING • ACTIVE_PIPELINE
+                    </div>
+
                 </div>
             </div>
         </div>

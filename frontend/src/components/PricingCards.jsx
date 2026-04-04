@@ -1,51 +1,131 @@
 export default function PricingCards() {
     return (
-        <div className="relative py-24 px-6 overflow-hidden">
-            {/* bg-gradient-to-br from-black via-zinc-900 to-black text-white */}
-            {/* 🌌 Same Glow as Hero */}
-            {/* <div className="absolute top-[-120px] left-[-120px] w-[500px] h-[500px] bg-cyan-500 opacity-10 blur-[150px] rounded-full"></div>
-            <div className="absolute bottom-[-120px] right-[-120px] w-[500px] h-[500px] bg-purple-500 opacity-10 blur-[150px] rounded-full"></div>
-            <div className="absolute top-[40%] left-[30%] w-[300px] h-[300px] bg-blue-500 opacity-5 blur-[120px] rounded-full"></div> */}
+        <section className="relative w-full overflow-hidden bg-[#0a0a0f] px-6 py-24 text-[#e4e1e9]">
 
-            <div className="relative z-10">
+            {/* Grid background */}
+            <div
+                className="pointer-events-none absolute inset-0 opacity-30"
+                style={{
+                    backgroundImage:
+                        "linear-gradient(rgba(0, 212, 255, 0.03) 1px, transparent 1px), linear-gradient(90deg, rgba(0, 212, 255, 0.03) 1px, transparent 1px)",
+                    backgroundSize: "24px 24px",
+                }}
+            />
 
-                {/* 🔥 Heading */}
-                <h2 className="text-4xl md:text-5xl font-bold text-center mb-16 py-4 bg-gradient-to-r from-cyan-400 via-blue-500 to-purple-500 bg-clip-text text-transparent">
-                    Pricing
-                </h2>
+            {/* Scanlines */}
+            <div
+                className="pointer-events-none absolute inset-0 opacity-20"
+                style={{
+                    background:
+                        "repeating-linear-gradient(0deg, rgba(0,0,0,0.12), rgba(0,0,0,0.12) 1px, transparent 1px, transparent 2px)",
+                }}
+            />
 
-                {/* Cards */}
-                <div className="max-w-6xl mx-auto grid md:grid-cols-3 gap-10">
+            <div className="relative z-10 max-w-7xl mx-auto">
 
-                    {/* Basic */}
-                    <div className="p-6 rounded-xl bg-white/[0.03] backdrop-blur border border-white/10 hover:border-purple-400 transition duration-300">
-                        <h3 className="text-xl font-bold text-cyan-400">Basic</h3>
-                        <p className="mt-2 text-gray-400">Free</p>
-                        <p className="mt-4 text-gray-300">
-                            Upload local files
-                        </p>
+                {/* Header */}
+                <div className="mb-16 border-b border-[#00d4ff]/10 pb-6">
+                    <div className="text-[10px] font-bold uppercase tracking-[0.3em] text-[#00d4ff] mb-3">
+                        ACCESS PROTOCOLS
                     </div>
 
-                    {/* Pro (highlighted) */}
-                    <div className="p-6 rounded-xl bg-white/[0.03] backdrop-blur border border-white/10 hover:border-purple-400 transition duration-300">
-                        <h3 className="text-xl font-bold text-cyan-400">Pro</h3>
-                        <p className="mt-2 text-white">$49/mo</p>
-                        <p className="mt-4 text-gray-300">
-                            1 Live CCTV Stream integration
+                    <h2
+                        className="text-4xl md:text-6xl font-black tracking-tighter text-white"
+                        style={{ textShadow: "2px 0 #ea0212, -2px 0 #00d4ff" }}
+                    >
+                        PRICING MATRIX
+                    </h2>
+
+                    <p className="mt-4 max-w-2xl text-sm text-slate-400">
+                        Select an operational tier based on surveillance scale and intelligence requirements.
+                    </p>
+                </div>
+
+                {/* Pricing grid */}
+                <div className="grid md:grid-cols-3 border border-[#00d4ff]/10 bg-[#0e0e13]">
+
+                    {/* BASIC */}
+                    <div className="p-8 border-b md:border-b-0 md:border-r border-[#00d4ff]/10 hover:bg-white/[0.03] transition">
+                        <div className="text-[10px] uppercase tracking-[0.3em] text-[#00d4ff] font-bold">
+                            Tier 01
+                        </div>
+
+                        <h3 className="mt-4 text-xl font-black text-white">
+                            BASIC
+                        </h3>
+
+                        <div className="mt-4 text-3xl font-black text-slate-300">
+                            FREE
+                        </div>
+
+                        <p className="mt-4 text-sm text-slate-400 leading-relaxed">
+                            Local file uploads with standard semantic indexing and query support.
                         </p>
+
+                        <div className="mt-6 text-[10px] font-mono tracking-widest text-slate-500">
+                            ACCESS_LEVEL: LOCAL_ONLY
+                        </div>
                     </div>
 
-                    {/* Enterprise */}
-                    <div className="p-6 rounded-xl bg-white/[0.03] backdrop-blur border border-white/10 hover:border-purple-400 transition duration-300">
-                        <h3 className="text-xl font-bold text-cyan-400">Enterprise</h3>
-                        <p className="mt-2 text-gray-400">Contact Us</p>
-                        <p className="mt-4 text-gray-300">
-                            Multi-camera WebRTC & unlimited alerts
+                    {/* PRO (highlight) */}
+                    <div className="p-8 border-b md:border-b-0 md:border-r border-[#00d4ff]/10 bg-[#00d4ff]/5 hover:bg-[#00d4ff]/10 transition">
+                        <div className="text-[10px] uppercase tracking-[0.3em] text-[#00d4ff] font-bold">
+                            Tier 02
+                        </div>
+
+                        <h3 className="mt-4 text-xl font-black text-white">
+                            PRO
+                        </h3>
+
+                        <div className="mt-4 text-3xl font-black text-[#00d4ff]">
+                            $49/mo
+                        </div>
+
+                        <p className="mt-4 text-sm text-slate-300 leading-relaxed">
+                            Single live CCTV stream integration with real-time query and alert system.
                         </p>
+
+                        <div className="mt-6 text-[10px] font-mono tracking-widest text-slate-400">
+                            ACCESS_LEVEL: LIVE_STREAM_ENABLED
+                        </div>
+
+                        {/* Highlight badge */}
+                        <div className="mt-6 inline-block border border-[#00d4ff] px-3 py-1 text-[10px] font-bold tracking-widest text-[#00d4ff]">
+                            MOST USED
+                        </div>
                     </div>
 
+                    {/* ENTERPRISE */}
+                    <div className="p-8 hover:bg-white/[0.03] transition">
+                        <div className="text-[10px] uppercase tracking-[0.3em] text-[#00d4ff] font-bold">
+                            Tier 03
+                        </div>
+
+                        <h3 className="mt-4 text-xl font-black text-white">
+                            ENTERPRISE
+                        </h3>
+
+                        <div className="mt-4 text-2xl font-black text-slate-300">
+                            CONTACT
+                        </div>
+
+                        <p className="mt-4 text-sm text-slate-400 leading-relaxed">
+                            Multi-camera WebRTC streams, unlimited alerts, and enterprise-grade deployment.
+                        </p>
+
+                        <div className="mt-6 text-[10px] font-mono tracking-widest text-slate-500">
+                            ACCESS_LEVEL: UNLIMITED
+                        </div>
+                    </div>
+                </div>
+
+                {/* Bottom system stats */}
+                <div className="mt-10 flex flex-col md:flex-row justify-between gap-4 text-[10px] font-mono tracking-widest text-slate-600">
+                    <div>STREAM_SUPPORT: RTSP / WebRTC</div>
+                    <div>ALERT_ENGINE: ACTIVE</div>
+                    <div>SCALABILITY: HORIZONTAL</div>
                 </div>
             </div>
-        </div>
+        </section>
     );
 }

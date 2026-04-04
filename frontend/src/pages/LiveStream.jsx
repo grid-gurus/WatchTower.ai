@@ -8,48 +8,54 @@ export default function LiveStream() {
   const [streamConfigs, setStreamConfigs] = useState([
     { url: "", name: "cam_1" },
     { url: "", name: "cam_2" },
-    { url: "", name: "cam_3" }
+    { url: "", name: "cam_3" },
   ]);
-  const [activeStreams, setActiveStreams] = useState([]); 
+  const [activeStreams, setActiveStreams] = useState([]);
   const [isStreaming, setIsStreaming] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [orientations, setOrientations] = useState({}); 
+  const [orientations, setOrientations] = useState({});
   const addToast = useToastStore((s) => s.addToast);
 
   useEffect(() => {
-    if (isStreaming) {
-      // Periodically check orientation for each active stream
-      const checkOrientations = async () => {
-        const newOrientations = { ...orientations };
-        try {
-          await Promise.all(activeStreams.map(async (stream) => {
-            const res = await axios.get(`http://localhost:8000/api/media/orientation/${stream.name}`);
+    if (!isStreaming) return;
+
+    const checkOrientations = async () => {
+      const newOrientations = { ...orientations };
+      try {
+        await Promise.all(
+          activeStreams.map(async (stream) => {
+            const res = await axios.get(
+              `http://localhost:8000/api/media/orientation/${stream.name}`
+            );
             newOrientations[stream.name] = res.data.orientation;
-          }));
-          setOrientations(newOrientations);
-        } catch (err) {
-          console.error("Orientation update failed:", err);
-        }
-      };
-      
-      const interval = setInterval(checkOrientations, 3000);
-      return () => clearInterval(interval);
-    }
-  }, [isStreaming, activeStreams]);
+          })
+        );
+        setOrientations(newOrientations);
+      } catch (err) {
+        console.error("Orientation update failed:", err);
+      }
+    };
+
+    const interval = setInterval(checkOrientations, 3000);
+    return () => clearInterval(interval);
+  }, [isStreaming, activeStreams, orientations]);
 
   const handleStartStream = async (e) => {
     e.preventDefault();
     const currentStreams = streamConfigs.slice(0, streamCount);
-    
-    if (currentStreams.some(s => !s.url.trim())) {
-      addToast("Please enter all stream URLs", "error");
+
+    if (currentStreams.some((s) => !s.url.trim() || !s.name.trim())) {
+      addToast("Please enter all stream names and URLs", "error");
       return;
     }
 
     setLoading(true);
     try {
       const res = await axios.post("http://localhost:8000/api/media/livestream", {
-        streams: currentStreams.map(s => ({ stream_url: s.url, source_name: s.name }))
+        streams: currentStreams.map((s) => ({
+          stream_url: s.url,
+          source_name: s.name,
+        })),
       });
 
       if (res.data.status === "success") {
@@ -74,62 +80,115 @@ export default function LiveStream() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-[#000000] via-[#020617] to-[#000000] text-white overflow-x-hidden relative">
-      {/* 🌌 Glow Background */}
-      <div className="fixed top-[-120px] left-[-120px] w-[500px] h-[500px] bg-cyan-400 opacity-15 blur-[200px] rounded-full"></div>
-      <div className="fixed bottom-[-120px] right-[-120px] w-[500px] h-[500px] bg-purple-500 opacity-15 blur-[200px] rounded-full"></div>
+    <div className="min-h-screen bg-[#050816] text-white relative overflow-hidden">
+      <div
+        className="absolute inset-0 opacity-20"
+        style={{
+          backgroundImage: `linear-gradient(rgba(0,212,255,0.05) 1px, transparent 1px),
+                            linear-gradient(90deg, rgba(0,212,255,0.05) 1px, transparent 1px)`,
+          backgroundSize: "28px 28px",
+        }}
+      />
+
+      <div
+        className="absolute inset-0 opacity-10"
+        style={{
+          background:
+            "repeating-linear-gradient(0deg, rgba(0,0,0,0.2), rgba(0,0,0,0.2) 1px, transparent 1px, transparent 2px)",
+        }}
+      />
 
       <Navbar />
 
-      <div className="relative z-10 max-w-4xl mx-auto pt-32 px-6">
-        <div className="p-[1.5px] rounded-2xl bg-gradient-to-r from-cyan-400 to-purple-500 shadow-2xl">
-          <div className="bg-black/90 backdrop-blur-xl rounded-2xl p-8 md:p-12">
-            <div className="mb-8 text-center">
-              <h1 className="text-4xl font-bold bg-gradient-to-r from-cyan-400 via-blue-500 to-purple-500 bg-clip-text text-transparent">
-                Live CCTV Stream
-              </h1>
-              <p className="text-gray-400 mt-3 text-lg">
-                Connect your local or remote CCTV server URL to activate God's Eye mode.
-              </p>
+      <div className="relative z-10 max-w-6xl mx-auto pt-28 px-6 pb-16">
+        <div className="mb-12 text-center">
+          <p className="text-[10px] tracking-[0.45em] text-cyan-400 uppercase">
+            Live Surveillance
+          </p>
+
+          <h1
+            className="text-4xl md:text-6xl font-black mt-4 leading-tight"
+            style={{ textShadow: "2px 0 #ea0212, -2px 0 #00d4ff" }}
+          >
+            Multi-Camera Control
+          </h1>
+
+          <p className="text-gray-400 mt-4 text-sm md:text-base max-w-2xl mx-auto">
+            Configure and deploy real-time CCTV feeds with a cyber-style monitoring dashboard.
+          </p>
+        </div>
+
+        <div className="relative group mb-10">
+          <div className="absolute -inset-[1px] bg-gradient-to-r from-cyan-500 via-purple-500 to-pink-500 opacity-20 blur group-hover:opacity-40 transition" />
+
+          <div className="relative border border-cyan-400/20 bg-[#0a0a0f]/80 backdrop-blur-md p-6 md:p-8 rounded-2xl shadow-[0_0_40px_rgba(0,212,255,0.08)]">
+            <div className="flex items-center justify-between mb-6">
+              <div>
+                <p className="text-[10px] tracking-[0.3em] text-cyan-400 uppercase">
+                  Camera Setup
+                </p>
+                <h2 className="text-xl md:text-2xl font-bold mt-2">
+                  Stream Configuration Panel
+                </h2>
+              </div>
+
+              <div className="text-right">
+                <p className="text-[10px] tracking-[0.3em] text-slate-500 uppercase">
+                  Status
+                </p>
+                <p className={`text-sm font-semibold mt-1 ${isStreaming ? "text-green-400" : "text-yellow-400"}`}>
+                  ● {isStreaming ? "Active" : "Idle"}
+                </p>
+              </div>
             </div>
 
             <form onSubmit={handleStartStream} className="space-y-6">
-              <div className="space-y-4">
-                <label className="text-sm font-medium text-gray-300 ml-1">Number of Parallel Streams</label>
-                <select 
-                  value={streamCount} 
+              <div>
+                <label className="text-[10px] tracking-[0.3em] text-cyan-400 uppercase">
+                  Stream Count
+                </label>
+
+                <select
+                  value={streamCount}
                   onChange={(e) => setStreamCount(Number(e.target.value))}
-                  className="w-full p-4 bg-white/[0.05] border border-white/10 rounded-xl outline-none focus:border-cyan-400 transition-all text-white"
+                  className="w-full mt-2 p-3 rounded-xl bg-[#0e0e13] border border-white/10 text-white outline-none focus:border-cyan-400 focus:shadow-[0_0_12px_rgba(0,212,255,0.25)] transition"
                 >
-                  <option value={1} className="bg-zinc-900">1 Stream (Solo View)</option>
-                  <option value={2} className="bg-zinc-900">2 Streams (Double Pulse)</option>
-                  <option value={3} className="bg-zinc-900">3 Streams (Tri-Monitor)</option>
+                  <option value={1}>1 Stream</option>
+                  <option value={2}>2 Streams</option>
+                  <option value={3}>3 Streams</option>
                 </select>
-                <p className="text-[10px] text-gray-500 mt-1 italic">
-                  💡 Tip: Ensure each source has a unique name (e.g. cam_1, cam_2) to prevent feed cross-talk.
-                </p>
               </div>
 
-              <div className="space-y-6">
+              <div className="grid gap-4">
                 {streamConfigs.slice(0, streamCount).map((cfg, i) => (
-                  <div key={i} className="grid grid-cols-1 md:grid-cols-2 gap-4 p-4 rounded-xl bg-white/[0.02] border border-white/5">
-                    <div className="space-y-2">
-                       <label className="text-xs font-semibold text-gray-500 uppercase tracking-widest">Source {i+1} Name</label>
-                       <input
+                  <div
+                    key={i}
+                    className="rounded-2xl border border-white/10 bg-black/30 p-4 md:p-5 hover:border-cyan-400/30 transition"
+                  >
+                    <div className="flex items-center justify-between mb-4">
+                      <p className="text-[10px] text-cyan-400 tracking-[0.3em] uppercase">
+                        Source {i + 1}
+                      </p>
+                      <span className="text-[10px] text-slate-500 font-mono">
+                        CAM-{i + 1}
+                      </span>
+                    </div>
+
+                    <div className="space-y-3">
+                      <input
                         type="text"
                         value={cfg.name}
                         onChange={(e) => updateConfig(i, "name", e.target.value)}
-                        className="w-full p-3 bg-black border border-white/10 rounded-lg outline-none focus:border-cyan-400 transition-all font-mono text-cyan-300 text-sm"
+                        placeholder="Camera name"
+                        className="w-full p-3 rounded-xl bg-black border border-white/10 text-cyan-300 font-mono text-sm outline-none focus:border-cyan-400 focus:shadow-[0_0_12px_rgba(0,212,255,0.2)] transition"
                       />
-                    </div>
-                    <div className="space-y-2">
-                       <label className="text-xs font-semibold text-gray-500 uppercase tracking-widest">URL / IP</label>
-                       <input
+
+                      <input
                         type="text"
                         value={cfg.url}
                         onChange={(e) => updateConfig(i, "url", e.target.value)}
-                        placeholder="rtsp://... or http://..."
-                        className="w-full p-3 bg-black border border-white/10 rounded-lg outline-none focus:border-cyan-400 transition-all font-mono text-cyan-300 text-sm"
+                        placeholder="rtsp:// or http://"
+                        className="w-full p-3 rounded-xl bg-black border border-white/10 text-cyan-300 font-mono text-sm outline-none focus:border-cyan-400 focus:shadow-[0_0_12px_rgba(0,212,255,0.2)] transition"
                       />
                     </div>
                   </div>
@@ -139,55 +198,87 @@ export default function LiveStream() {
               <button
                 type="submit"
                 disabled={loading}
-                className="w-full py-4 rounded-xl bg-gradient-to-r from-cyan-400 via-blue-500 to-purple-500 text-black font-bold text-lg shadow-lg shadow-cyan-500/20 hover:scale-[1.02] active:scale-[0.98] transition-all disabled:opacity-50"
+                className="w-full relative overflow-hidden rounded-xl border border-cyan-400 bg-[#00d4ff] text-black font-extrabold py-3.5 tracking-[0.35em] uppercase transition-all duration-300 hover:scale-[1.01] active:scale-[0.99] disabled:opacity-70 disabled:cursor-not-allowed"
               >
-                {loading ? "Initializing Stream..." : "🚀 Activate Live Stream Trace"}
+                <span className="relative z-10">
+                  {loading ? "Initializing..." : "Activate Stream"}
+                </span>
+                <span className="absolute inset-0 bg-white/25 translate-x-[-120%] hover:translate-x-[120%] transition-transform duration-700" />
               </button>
             </form>
+          </div>
+        </div>
 
-            <div className="mt-12 p-6 rounded-xl border border-white/5 bg-white/[0.02]">
-              <h3 className="text-white font-semibold flex items-center gap-2 mb-4">
-                <span className="w-2 h-2 rounded-full bg-cyan-400 animate-pulse"></span>
-                Tiled Multi-Monitor View
-              </h3>
+        <div className="relative group">
+          <div className="absolute -inset-[1px] bg-gradient-to-r from-purple-500 via-cyan-500 to-blue-500 opacity-20 blur group-hover:opacity-40 transition" />
 
-              <div className={`mt-4 grid gap-3 min-h-[400px] ${
-                activeStreams.length === 1 ? "grid-cols-1" : 
-                activeStreams.length === 2 ? "grid-cols-2" : 
-                "grid-cols-2 grid-rows-2"
-              }`}>
-                {isStreaming ? (
-                  activeStreams.map((stream, i) => {
-                    const isPortrait = orientations[stream.name] === "portrait";
-                    const isTiledThird = activeStreams.length === 3 && i === 0;
-                    
-                    return (
-                      <div 
-                        key={i} 
-                        className={`relative rounded-lg bg-zinc-900 border border-white/10 overflow-hidden flex items-center justify-center transition-all duration-700
-                          ${isTiledThird ? "row-span-2 col-span-1" : ""}
-                        `}
-                      >
-                        <img 
-                          src={`http://localhost:8000/api/media/stream/${stream.name}`} 
-                          alt={stream.name}
-                          className={`w-full h-full ${isPortrait ? "object-contain" : "object-cover"}`}
-                        />
-                        <div className="absolute top-2 left-2 px-2 py-0.5 bg-red-600/80 text-[8px] font-bold rounded flex items-center gap-1 backdrop-blur-md">
-                          <span className="w-1 h-1 bg-white rounded-full animate-pulse"></span> {stream.name.toUpperCase()}
-                        </div>
-                      </div>
-                    );
-                  })
-                ) : (
-                    <div className="col-span-full h-64 flex flex-col items-center justify-center text-gray-500 bg-white/[0.01] rounded-xl border border-dashed border-white/10">
-                        <div className="text-4xl mb-4 opacity-20">📡</div>
-                        <p>Awaiting parallel stream activation...</p>
-                    </div>
-                )}
+          <div className="relative border border-purple-400/20 bg-[#0a0a0f]/80 backdrop-blur-md p-6 md:p-8 rounded-2xl shadow-[0_0_40px_rgba(168,85,247,0.08)]">
+            <div className="flex items-center justify-between mb-5">
+              <div>
+                <p className="text-[10px] tracking-[0.3em] text-purple-400 uppercase">
+                  Live Feeds
+                </p>
+                <h3 className="text-lg font-semibold mt-2">
+                  Multi-View Monitoring Grid
+                </h3>
               </div>
+
+              <span className="text-green-400 text-xs animate-pulse">
+                ● {isStreaming ? "LIVE" : "WAITING"}
+              </span>
+            </div>
+
+            <div
+              className={`grid gap-4 min-h-[420px] ${activeStreams.length === 1
+                  ? "grid-cols-1"
+                  : activeStreams.length === 2
+                    ? "grid-cols-1 md:grid-cols-2"
+                    : "grid-cols-1 md:grid-cols-2 lg:grid-cols-2"
+                }`}
+            >
+              {isStreaming ? (
+                activeStreams.map((stream, i) => {
+                  const isPortrait = orientations[stream.name] === "portrait";
+
+                  return (
+                    <div
+                      key={i}
+                      className="relative overflow-hidden rounded-2xl border border-white/10 bg-black shadow-lg min-h-[240px] group"
+                    >
+                      <img
+                        src={`http://localhost:8000/api/media/stream/${stream.name}`}
+                        alt={stream.name}
+                        className={`w-full h-full min-h-[240px] ${isPortrait ? "object-contain bg-black" : "object-cover"
+                          }`}
+                      />
+
+                      <div className="absolute inset-0 bg-gradient-to-t from-black/50 via-transparent to-transparent pointer-events-none" />
+
+                      <div className="absolute top-3 left-3 text-[10px] bg-black/70 px-3 py-1.5 rounded-full border border-cyan-400/20 backdrop-blur-md">
+                        {stream.name.toUpperCase()}
+                      </div>
+
+                      <div className="absolute top-3 right-3 text-[10px] text-green-400 bg-black/50 px-2 py-1 rounded-full border border-green-400/20">
+                        ● LIVE
+                      </div>
+
+                      <div className="absolute bottom-3 left-3 text-[10px] text-slate-300 bg-black/60 px-3 py-1.5 rounded-full border border-white/10">
+                        {isPortrait ? "Portrait" : "Landscape"}
+                      </div>
+                    </div>
+                  );
+                })
+              ) : (
+                <div className="col-span-full flex items-center justify-center rounded-2xl border border-dashed border-white/10 bg-black/20 min-h-[420px] text-gray-500">
+                  Awaiting stream activation...
+                </div>
+              )}
             </div>
           </div>
+        </div>
+
+        <div className="mt-10 text-[10px] text-slate-600 font-mono tracking-widest text-center">
+          MULTI_CAM_ENGINE • LIVE_MONITORING • AI_READY
         </div>
       </div>
     </div>

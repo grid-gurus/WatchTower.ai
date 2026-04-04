@@ -1,192 +1,183 @@
 import { useState, useEffect } from "react";
-import { useNavigate } from "react-router-dom";
 import Navbar from "../components/Navbar";
-import useToastStore from "../store/useToastStore";
+import { useNavigate } from "react-router-dom";
+import axios from "axios";
 
-export default function Profile() {
+export default function MyProfile() {
   const navigate = useNavigate();
-  const addToast = useToastStore((s) => s.addToast);
+  const [user, setUser] = useState(null);
+  const [loading, setLoading] = useState(true);
 
-  const [fullName, setFullName] = useState("");
-  const [email, setEmail] = useState("");
-  const [telegram, setTelegram] = useState("");
-  const [phone, setPhone] = useState("");
-  const [loading, setLoading] = useState(false);
-  const [fetching, setFetching] = useState(true);
-
-  // Load profile data on component mount
   useEffect(() => {
-    const loadProfile = async () => {
-      try {
-        const token = localStorage.getItem("access_token");
-        if (!token) {
-          addToast("Please login first", "error");
-          navigate("/login");
-          return;
-        }
-
-        const res = await fetch("http://127.0.0.1:8000/api/auth/profile", {
-          method: "GET",
-          headers: {
-            "Content-Type": "application/json",
-            "Authorization": `Bearer ${token}`
-          }
-        });
-
-        if (res.ok) {
-          const data = await res.json();
-          setFullName(data.full_name || "");
-          setEmail(data.email || "");
-          setTelegram(data.telegram_handle || "");
-          setPhone(data.phone || "");
-        } else if (res.status === 401) {
-          addToast("Session expired. Please login again", "error");
-          localStorage.removeItem("access_token");
-          localStorage.removeItem("refresh_token");
-          navigate("/login");
-        } else {
-          const errorData = await res.json();
-          addToast(errorData.detail || "Failed to load profile", "error");
-        }
-      } catch (err) {
-        console.error(err);
-        addToast("Failed to load profile", "error");
-      } finally {
-        setFetching(false);
-      }
-    };
-
-    loadProfile();
-  }, []);
-
-  const handleSave = async () => {
-    setLoading(true);
-    try {
+    const fetchProfile = async () => {
       const token = localStorage.getItem("access_token");
       if (!token) {
-        addToast("Please login first", "error");
         navigate("/login");
         return;
       }
 
-      addToast("Saving profile...", "info", 1000);
-
-      const res = await fetch("http://127.0.0.1:8000/api/auth/profile", {
-        method: "PUT",
-        headers: {
-          "Content-Type": "application/json",
-          "Authorization": `Bearer ${token}`
-        },
-        body: JSON.stringify({
-          full_name: fullName,
-          telegram_handle: telegram,
-          phone: phone
-        })
-      });
-
-      if (res.ok) {
-        addToast("Profile updated successfully!", "success");
-        console.log("Profile updated:", { fullName, email, telegram, phone });
-      } else if (res.status === 401) {
-        addToast("Session expired. Please login again", "error");
-        localStorage.removeItem("access_token");
-        localStorage.removeItem("refresh_token");
-        navigate("/login");
-      } else {
-        const errorData = await res.json();
-        addToast(errorData.detail || "Failed to save profile", "error");
+      try {
+        const res = await axios.get("http://localhost:8000/api/auth/profile", {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        setUser(res.data);
+      } catch (err) {
+        console.error("Failed to fetch profile:", err);
+      } finally {
+        setLoading(false);
       }
-    } catch (err) {
-      console.error(err);
-      addToast("Failed to save profile", "error");
-    } finally {
-      setLoading(false);
-    }
-  };
+    };
+
+    fetchProfile();
+  }, [navigate]);
+
+  if (loading)
+    return (
+      <div className="min-h-screen bg-[#050816] flex items-center justify-center text-cyan-400 font-mono tracking-widest">
+        INITIALIZING USER NODE...
+      </div>
+    );
+
+  if (!user)
+    return (
+      <div className="min-h-screen bg-[#050816] flex items-center justify-center text-red-400 font-mono tracking-widest">
+        USER NODE NOT FOUND
+      </div>
+    );
 
   return (
-    <div className="relative min-h-screen bg-gradient-to-br from-[#000000] via-[#020617] to-[#000000] text-white overflow-hidden">
+    <div className="min-h-screen bg-[#050816] text-white relative overflow-hidden">
 
-      {/* 🌌 Subtle Glow (reduced brightness for darker feel) */}
-      <div className="absolute top-[-120px] left-[-120px] w-[500px] h-[500px] bg-cyan-400 opacity-15 blur-[200px] rounded-full"></div>
-      <div className="absolute bottom-[-120px] right-[-120px] w-[500px] h-[500px] bg-purple-500 opacity-15 blur-[200px] rounded-full"></div>
-      <div className="absolute top-[40%] left-[30%] w-[300px] h-[300px] bg-indigo-500 opacity-10 blur-[180px] rounded-full"></div>
+      {/* Grid */}
+      <div className="absolute inset-0 opacity-20"
+        style={{
+          backgroundImage:
+            "linear-gradient(rgba(0,212,255,0.05) 1px, transparent 1px), linear-gradient(90deg, rgba(0,212,255,0.05) 1px, transparent 1px)",
+          backgroundSize: "28px 28px",
+        }}
+      />
 
-      {/* Navbar (optional) */}
-      {/* <Navbar /> */}
+      {/* Scanlines */}
+      <div className="absolute inset-0 opacity-10"
+        style={{
+          background:
+            "repeating-linear-gradient(0deg, rgba(0,0,0,0.2), rgba(0,0,0,0.2) 1px, transparent 1px, transparent 2px)",
+        }}
+      />
 
-      <div className="relative z-10 flex justify-center items-center py-24 px-4">
+      <Navbar />
 
-        <div className="w-full max-w-xl p-[1.5px] rounded-xl bg-gradient-to-r from-cyan-400 to-purple-500">
+      <div className="relative z-10 max-w-4xl mx-auto pt-28 px-4">
 
-            <div className="bg-black rounded-xl p-8">
+        {/* HEADER */}
+        <div className="mb-12 text-center">
+          <p className="text-[10px] tracking-[0.4em] text-cyan-400">
+            USER PROFILE
+          </p>
 
-            <h2 className="text-2xl font-bold mb-6 bg-gradient-to-r from-cyan-400 to-purple-500 bg-clip-text text-transparent">
-              Profile Settings
-            </h2>
-
-            {fetching ? (
-              <div className="text-center text-gray-400">Loading profile...</div>
-            ) : (
-              <>
-                <div className="mb-6">
-                  <label className="text-sm text-gray-400">Full Name</label>
-                  <input
-                    value={fullName}
-                    onChange={(e) => setFullName(e.target.value)}
-                    placeholder="Your full name"
-                    className="w-full mt-1 p-3 rounded-lg bg-white/[0.05] border border-white/10 outline-none focus:border-cyan-400"
-                  />
-                </div>
-
-                <div className="mb-6">
-                  <label className="text-sm text-gray-400">Email</label>
-                  <input
-                    value={email}
-                    disabled
-                    placeholder="user@gmail.com"
-                    className="w-full mt-1 p-3 rounded-lg bg-white/[0.05] border border-white/10 outline-none text-gray-500"
-                  />
-                  <p className="text-xs text-gray-500 mt-1">Email cannot be changed</p>
-                </div>
-
-                <div className="mb-6">
-                  <label className="text-sm text-gray-400">
-                    Telegram Handle
-                  </label>
-                  <input
-                    value={telegram}
-                    onChange={(e) => setTelegram(e.target.value)}
-                    placeholder="@your_handle"
-                    className="w-full mt-1 p-3 rounded-lg bg-white/[0.05] border border-white/10 outline-none focus:border-cyan-400"
-                  />
-                </div>
-
-                <div className="mb-6">
-                  <label className="text-sm text-gray-400">
-                    Phone Number
-                  </label>
-                  <input
-                    value={phone}
-                    onChange={(e) => setPhone(e.target.value)}
-                    placeholder="+91 9876543210"
-                    className="w-full mt-1 p-3 rounded-lg bg-white/[0.05] border border-white/10 outline-none focus:border-cyan-400"
-                  />
-                </div>
-
-                <button
-                  onClick={handleSave}
-                  disabled={loading}
-                  className="w-full py-3 rounded-lg bg-gradient-to-r from-cyan-400 to-purple-500 text-black font-semibold hover:scale-[1.02] transition disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100"
-                >
-                  {loading ? "Saving..." : "Save Changes"}
-                </button>
-              </>
-            )}
-
-          </div>
+          <h2
+            className="text-4xl font-black mt-3"
+            style={{ textShadow: "2px 0 #ea0212, -2px 0 #00d4ff" }}
+          >
+            SURVEILLANCE IDENTITY
+          </h2>
         </div>
 
+        {/* MAIN PANEL */}
+        <div className="border border-cyan-400/20 bg-[#0a0a0f] p-8 shadow-[0_0_40px_rgba(0,212,255,0.05)]">
+
+          {/* AVATAR */}
+          <div className="flex flex-col items-center border-b border-cyan-400/10 pb-8">
+
+            {user.profile_picture && user.profile_picture.trim() !== "" ? (
+              <img
+                src={user.profile_picture}
+                alt="profile"
+                className="w-28 h-28 object-cover border border-cyan-400 shadow-[0_0_20px_rgba(0,212,255,0.3)]"
+              />
+            ) : (
+              <div className="w-28 h-28 border border-cyan-400 flex items-center justify-center text-4xl font-bold text-cyan-400 shadow-[0_0_20px_rgba(0,212,255,0.3)]">
+                {user.full_name?.[0]?.toUpperCase() || "U"}
+              </div>
+            )}
+
+            <h3 className="mt-5 text-2xl font-bold tracking-wide">
+              {user.full_name || "UNKNOWN USER"}
+            </h3>
+
+            <p className="text-xs text-slate-500 tracking-[0.3em] mt-2">
+              WATCHTOWER OPERATOR
+            </p>
+          </div>
+
+          {/* INFO */}
+          <div className="mt-8 space-y-5 text-sm">
+
+            <div className="flex justify-between border-b border-white/5 pb-3">
+              <span className="text-slate-500 tracking-wider">EMAIL</span>
+              <span className="text-white">{user.email}</span>
+            </div>
+
+            <div className="flex justify-between border-b border-white/5 pb-3">
+              <span className="text-slate-500 tracking-wider">TELEGRAM</span>
+              <span className="text-cyan-400 font-mono">
+                {user.telegram_handle || "@not_set"}
+              </span>
+            </div>
+
+          </div>
+
+          {/* STATS */}
+          <div className="grid grid-cols-2 gap-4 mt-8">
+
+            <div className="border border-cyan-400/10 p-5 text-center hover:border-cyan-400/40 transition">
+              <p className="text-xs text-slate-500">STATUS</p>
+              <p className="text-xl font-bold text-cyan-400">
+                {user.is_active ? "ACTIVE" : "INACTIVE"}
+              </p>
+            </div>
+
+            <div className="border border-purple-400/10 p-5 text-center hover:border-purple-400/40 transition">
+              <p className="text-xs text-slate-500">JOINED</p>
+              <p className="text-sm text-purple-400">
+                {new Date(user.created_at).toLocaleDateString()}
+              </p>
+            </div>
+
+            <div className="border border-white/10 p-5 text-center col-span-2">
+              <p className="text-xs text-slate-500">LAST UPLOAD</p>
+              <p className="text-sm text-purple-400">
+                {user.lastUpload || "N/A"}
+              </p>
+            </div>
+
+          </div>
+
+          {/* BUTTONS */}
+          <div className="flex gap-4 mt-8">
+
+            <button
+              onClick={() => navigate("/me/edit")}
+              className="flex-1 border border-cyan-400 bg-[#00d4ff] text-black font-bold py-3 tracking-widest hover:invert transition active:scale-95"
+            >
+              EDIT PROFILE
+            </button>
+
+            <button
+              onClick={() => navigate("/alerts/create")}
+              className="flex-1 border border-purple-400 text-purple-400 py-3 tracking-widest hover:bg-purple-400/10 transition active:scale-95"
+            >
+              CREATE ALERT
+            </button>
+
+          </div>
+
+          {/* FOOTER */}
+          <div className="mt-8 text-[10px] text-slate-600 font-mono tracking-widest text-center">
+            USER_NODE • VERIFIED • AI_MONITORING_ENABLED
+          </div>
+
+        </div>
       </div>
     </div>
   );

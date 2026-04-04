@@ -46,11 +46,7 @@ export default function MinimalNavbar() {
       try {
         const res = await fetch("http://127.0.0.1:8000/api/alerts/logs");
 
-        if (!res.ok) {
-          const text = await res.text();
-          console.error("Alert Logs Backend Error:", text);
-          throw new Error("⚠️ Unable to load alerts");
-        }
+        if (!res.ok) throw new Error("⚠️ Unable to load alerts");
 
         const data = await res.json();
 
@@ -63,7 +59,6 @@ export default function MinimalNavbar() {
 
         setAlertLogs(logs);
       } catch (err) {
-        console.error("Alert logs fetch failed:", err);
         setAlertLogsError("⚠️ Unable to load alerts");
         setAlertLogs([]);
       } finally {
@@ -92,64 +87,73 @@ export default function MinimalNavbar() {
 
   return (
     <div className="fixed top-0 w-full z-50">
-      {/* Background */}
-      <div className="absolute inset-0 bg-gradient-to-r from-black via-zinc-900 to-black opacity-95 backdrop-blur-xl"></div>
 
-      {/* Glow Line */}
-      <div className="absolute bottom-0 left-0 w-full h-[2px] bg-gradient-to-r from-transparent via-cyan-400 to-purple-500 opacity-40"></div>
+      {/* 🔥 Tactical Background */}
+      <div className="absolute inset-0 bg-[#131318]/90 backdrop-blur-md"></div>
+
+      {/* Grid */}
+      <div
+        className="absolute inset-0 opacity-30"
+        style={{
+          backgroundImage:
+            "linear-gradient(rgba(0, 212, 255, 0.03) 1px, transparent 1px), linear-gradient(90deg, rgba(0, 212, 255, 0.03) 1px, transparent 1px)",
+          backgroundSize: "24px 24px",
+        }}
+      />
+
+      {/* Scanline */}
+      <div
+        className="absolute inset-0 opacity-20"
+        style={{
+          background:
+            "repeating-linear-gradient(0deg, rgba(0,0,0,0.12), rgba(0,0,0,0.12) 1px, transparent 1px, transparent 2px)",
+        }}
+      />
+
+      {/* Bottom glow line */}
+      <div className="absolute bottom-0 left-0 w-full h-[1px] bg-gradient-to-r from-transparent via-cyan-400 to-transparent opacity-70"></div>
 
       {/* Content */}
-      <div className="relative max-w-7xl mx-auto flex items-center justify-between px-4 md:px-8 py-4 gap-4">
-        {/* Left: Logo */}
-        <Link to="/" className="flex items-center justify-start gap-3">
-          <h1 className="text-xl md:text-2xl font-bold bg-gradient-to-r from-cyan-400 via-blue-500 to-purple-500 bg-clip-text text-transparent shrink-0">
+      <div className="relative max-w-7xl mx-auto flex items-center justify-between px-4 md:px-8 py-4">
+
+        {/* Logo */}
+        <Link to="/" className="flex items-center gap-2">
+          <h1 className="text-xl md:text-2xl font-black tracking-tight text-[#00d4ff]">
             CCTV AI
           </h1>
+          <span className="hidden md:block text-[10px] tracking-[0.3em] text-slate-500">
+            GUEST MODE
+          </span>
         </Link>
 
-        {/* Center: Logged-in navigation */}
-        {isLoggedIn && (
-          <div className="hidden md:flex items-center justify-center gap-8 text-base font-semibold">
-            <Link
-              to="/dashboard"
-              className="bg-gradient-to-r from-white to-gray-400 bg-clip-text text-transparent hover:from-cyan-400 hover:to-purple-500 transition"
-            >
-              Dashboard
-            </Link>
-            <Link
-              to="/tripwires"
-              className="bg-gradient-to-r from-white to-gray-400 bg-clip-text text-transparent hover:from-cyan-400 hover:to-purple-500 transition"
-            >
-              Tripwires
-            </Link>
-          </div>
-        )}
+        {/* Right Side */}
+        <div className="flex items-center gap-3">
 
-        {/* Right: Auth buttons or user icons */}
-        <div className="flex gap-3 items-center">
           {isLoggedIn ? (
             <>
               {/* Notification */}
-              <div className="relative shrink-0">
-                <div
+              <div className="relative">
+                <button
                   onClick={handleNotificationClick}
-                  className="p-[1.5px] rounded-full bg-gradient-to-r from-cyan-400 to-purple-500 cursor-pointer"
+                  className="border border-[#00d4ff]/25 bg-[#0e0e13] p-[1.5px] hover:scale-105 transition"
                 >
-                  <div className="w-9 h-9 rounded-full bg-black flex items-center justify-center text-white hover:scale-105 transition">
+                  <div className="w-9 h-9 flex items-center justify-center bg-black text-white">
                     <Bell size={18} />
                   </div>
-                </div>
+                </button>
 
-                {alertLogs.length > 0 || notifications.length > 0 && (
+                {(alertLogs.length > 0 || notifications.length > 0) && (
                   <span className="absolute -top-1 -right-1 bg-red-500 text-[10px] min-w-5 h-5 px-1 rounded-full flex items-center justify-center">
-                    {alertLogs.length > 0 ? alertLogs.length : notifications.length}
+                    {alertLogs.length || notifications.length}
                   </span>
                 )}
 
                 {open && (
-                  <div className="absolute right-0 mt-3 w-72 bg-black border border-white/10 rounded-xl shadow-xl p-4 space-y-3 z-50">
+                  <div className="absolute right-0 mt-3 w-72 bg-[#0a0a0f] border border-white/10 p-4 space-y-3 z-50">
                     <div className="flex justify-between items-center">
-                      <span className="text-sm text-gray-400">Notifications</span>
+                      <span className="text-xs uppercase tracking-widest text-gray-400">
+                        Notifications
+                      </span>
                       <button
                         onClick={clearNotifications}
                         className="text-xs text-cyan-400 hover:underline"
@@ -159,63 +163,19 @@ export default function MinimalNavbar() {
                     </div>
 
                     {alertLogsLoading ? (
-                      <div className="space-y-3">
+                      <div className="space-y-2">
                         {[1, 2].map((i) => (
-                          <div
-                            key={i}
-                            className="h-16 rounded-lg bg-white/5 border border-white/10 animate-pulse"
-                          />
+                          <div key={i} className="h-12 bg-white/5 animate-pulse" />
                         ))}
                       </div>
-                    ) : alertLogsError ? (
-                      <p className="text-red-300 text-sm">{alertLogsError}</p>
-                    ) : alertLogs.length > 0 || notifications.length > 0 ? (
-                      <div className="space-y-3">
-                        {alertLogs.map((item, i) => {
-                          const message =
-                            item.message ||
-                            item.alert ||
-                            item.text ||
-                            item.title ||
-                            "Alert";
-
-                          const time =
-                            item.created_at ||
-                            item.timestamp ||
-                            item.time ||
-                            item.createdAt ||
-                            "";
-
-                          return (
-                            <div
-                              key={item.id || i}
-                              className="p-3 rounded-lg bg-red-500/10 border border-red-400/30"
-                            >
-                              <p className="text-white text-sm">🚨 {message}</p>
-                              {item.description && (
-                                <p className="text-xs text-gray-300 mt-1">
-                                  {item.description}
-                                </p>
-                              )}
-                              {time && (
-                                <p className="text-xs text-gray-400 mt-1">
-                                  {time}
-                                </p>
-                              )}
-                            </div>
-                          );
-                        })}
-                        {notifications.map((n, i) => (
-                          <div
-                            key={i}
-                            className="p-3 rounded-lg bg-red-500/10 border border-red-400/30"
-                          >
-                            <p className="text-white text-sm">🚨 {n}</p>
-                          </div>
-                        ))}
-                      </div>
+                    ) : alertLogs.length > 0 ? (
+                      alertLogs.map((item, i) => (
+                        <div key={i} className="p-3 bg-red-500/10 border border-red-400/30">
+                          <p className="text-sm text-white">🚨 {item.message || "Alert"}</p>
+                        </div>
+                      ))
                     ) : (
-                      <p className="text-gray-500 text-sm">No alerts yet</p>
+                      <p className="text-sm text-gray-500">No alerts</p>
                     )}
                   </div>
                 )}
@@ -224,9 +184,9 @@ export default function MinimalNavbar() {
               {/* Profile */}
               <button
                 onClick={handleProfileClick}
-                className="p-[1.5px] rounded-full bg-gradient-to-r from-cyan-400 to-purple-500 hover:scale-105 transition shrink-0"
+                className="border border-[#00d4ff]/25 bg-[#0e0e13] p-[1.5px] hover:scale-105 transition"
               >
-                <div className="w-9 h-9 rounded-full bg-black flex items-center justify-center text-white">
+                <div className="w-9 h-9 flex items-center justify-center bg-black text-white">
                   <User size={18} />
                 </div>
               </button>
@@ -235,17 +195,16 @@ export default function MinimalNavbar() {
             <>
               {/* Login */}
               <Link to="/login">
-                <button className="px-4 py-2 rounded-lg font-semibold text-white hover:text-cyan-400 transition-colors duration-300">
+                <button className="border border-[#00d4ff]/25 px-5 py-2 text-sm text-white hover:border-[#00d4ff] transition">
                   Login
                 </button>
               </Link>
+
               {/* Sign Up */}
               <Link to="/signup">
-                <div className="p-[1.5px] rounded-lg bg-gradient-to-r from-cyan-400 to-purple-500">
-                  <button className="px-4 py-2 rounded-lg bg-black font-semibold text-white hover:bg-gradient-to-r hover:from-cyan-400 hover:to-purple-500 transition-all duration-300">
-                    Sign Up
-                  </button>
-                </div>
+                <button className="bg-[#00d4ff] px-5 py-2 text-sm font-bold text-black hover:invert transition">
+                  Sign Up
+                </button>
               </Link>
             </>
           )}

@@ -12,7 +12,7 @@ def setup_environment():
     
     for directory in directories:
         os.makedirs(directory, exist_ok=True)
-        print(f"📁 Created directory: {directory}")
+        print(f"Created directory: {directory}")
 
     print("Initializing offline VectorDB...")
     client = chromadb.PersistentClient(path="./data/vector_db")

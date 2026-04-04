@@ -28,11 +28,8 @@ export default function ChatPanel() {
       const data = res.data;
       console.log("ML result:", data);
 
-      // ✅ SAFE CHECK BEFORE USING DATA
       if (data && data.clip_start !== undefined && data.clip_end !== undefined) {
-        playFromQuery(data);   // only call if valid
-      } else {
-        console.warn("No playable clip found");
+        playFromQuery(data);
       }
 
       const aiMsg = {
@@ -60,54 +57,94 @@ export default function ChatPanel() {
   };
 
   return (
-    <div className="h-full flex flex-col">
+    <div className="h-full flex flex-col bg-[#050816] relative overflow-hidden">
 
-      {/* Messages */}
-      <div className="flex-1 overflow-y-auto p-4 space-y-4">
+      {/* 🔥 Grid background */}
+      <div
+        className="absolute inset-0 opacity-20"
+        style={{
+          backgroundImage:
+            "linear-gradient(rgba(0,212,255,0.05) 1px, transparent 1px), linear-gradient(90deg, rgba(0,212,255,0.05) 1px, transparent 1px)",
+          backgroundSize: "24px 24px",
+        }}
+      />
 
-        {messages.map((msg, i) => (
-          <div
-            key={i}
-            className={`max-w-[75%] px-4 py-3 rounded-lg ${msg.type === "user"
-              ? "ml-auto bg-gradient-to-r from-cyan-400 to-purple-500 text-black"
-              : "bg-white/[0.05] border border-white/10"
-              }`}
-          >
-            <p>{msg.text}</p>
+      {/* Scanline */}
+      <div
+        className="absolute inset-0 opacity-10"
+        style={{
+          background:
+            "repeating-linear-gradient(0deg, rgba(0,0,0,0.2), rgba(0,0,0,0.2) 1px, transparent 1px, transparent 2px)",
+        }}
+      />
 
-            {/* Optional manual replay */}
-            {msg.type === "ai" && (
-              <button
-                className="mt-2 text-sm text-cyan-400 hover:underline"
-                onClick={() =>
-                  playClip(msg.clip_start, msg.clip_end)
-                }
-              >
-                ▶ Play Event Match
-              </button>
-            )}
+      {/* Content */}
+      <div className="relative z-10 flex flex-col h-full">
+
+        {/* Header */}
+        {/* <div className="p-4 border-b border-cyan-400/10 flex items-center justify-between">
+          <div>
+            <p className="text-[10px] tracking-[0.3em] text-cyan-400">
+              AI QUERY INTERFACE
+            </p>
+            <h2 className="text-lg font-bold text-white">
+              Video Intelligence
+            </h2>
           </div>
-        ))}
+          <span className="text-xs text-green-400 animate-pulse">
+            ● LIVE
+          </span>
+        </div> */}
 
-        {loading && <LoadingScanner />}
+        {/* Messages */}
+        <div className="flex-1 overflow-y-auto p-6 space-y-5 custom-scrollbar">
 
-      </div>
+          {messages.map((msg, i) => (
+            <div
+              key={i}
+              className={`max-w-[75%] px-4 py-3 border text-sm tracking-wide ${msg.type === "user"
+                ? "ml-auto bg-[#00d4ff] text-black border-[#00d4ff]"
+                : "bg-[#0e0e13] border-white/10 text-white"
+                }`}
+            >
+              <p>{msg.text}</p>
 
-      {/* Input */}
-      <div className="p-4 border-t border-white/10 flex gap-3">
-        <input
-          value={input}
-          onChange={(e) => setInput(e.target.value)}
-          placeholder="Ask something..."
-          className="flex-1 p-3 rounded-lg bg-white/[0.05] border border-white/10 outline-none focus:border-cyan-400"
-        />
+              {/* Replay */}
+              {msg.type === "ai" && msg.clip_start !== undefined && (
+                <button
+                  className="mt-3 text-xs text-cyan-400 hover:underline"
+                  onClick={() => playClip(msg.clip_start, msg.clip_end)}
+                >
+                  ▶ PLAY MATCHED EVENT
+                </button>
+              )}
+            </div>
+          ))}
 
-        <button
-          onClick={handleSend}
-          className="px-6 py-2 rounded-lg bg-gradient-to-r from-cyan-400 to-purple-500 text-black font-semibold"
-        >
-          Send
-        </button>
+          {loading && (
+            <div className="flex justify-center">
+              <LoadingScanner />
+            </div>
+          )}
+        </div>
+
+        {/* Input */}
+        <div className="p-4 border-t border-cyan-400/10 flex gap-3 bg-[#0a0a0f]">
+
+          <input
+            value={input}
+            onChange={(e) => setInput(e.target.value)}
+            placeholder="Enter surveillance query..."
+            className="flex-1 px-4 py-3 bg-[#0e0e13] border border-white/10 text-white placeholder:text-gray-500 outline-none focus:border-cyan-400 text-sm tracking-wide"
+          />
+
+          <button
+            onClick={handleSend}
+            className="px-6 py-3 bg-[#00d4ff] text-black font-bold tracking-wider hover:invert transition active:scale-95"
+          >
+            SEND
+          </button>
+        </div>
       </div>
     </div>
   );
