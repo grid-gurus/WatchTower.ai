@@ -200,8 +200,11 @@ async def websocket_alerts(websocket: WebSocket):
 
 @app.post("/api/auth/signup", response_model=TokenResponse)
 async def signup(user: UserSignup, db: Session = Depends(get_db)):
+    print(f"[API] POST /api/auth/signup - Attempting signup for email: {user.email}")
     existing_user = db.query(models.User).filter(models.User.email == user.email).first()
-    if existing_user: raise HTTPException(status_code=400, detail="Email already registered")
+    if existing_user: 
+        print(f"[API] POST /api/auth/signup - Failed: Email {user.email} already registered.")
+        raise HTTPException(status_code=400, detail="Email already registered")
     
     hashed_password = hash_password(user.password)
     db_user = models.User(
@@ -215,8 +218,10 @@ async def signup(user: UserSignup, db: Session = Depends(get_db)):
 
 @app.post("/api/auth/login", response_model=TokenResponse)
 async def login(user: UserLogin, response: Response, db: Session = Depends(get_db)):
+    print(f"[API] POST /api/auth/login - Attempting login for email: {user.email}")
     db_user = db.query(models.User).filter(models.User.email == user.email).first()
     if not db_user or not db_user.is_active or not verify_password(user.password, db_user.hashed_password):
+        print(f"[API] POST /api/auth/login - Failed for email: {user.email}")
         raise HTTPException(status_code=401, detail="Invalid email or password")
     
     tokens = create_tokens(db_user.id, db_user.email)
@@ -226,6 +231,7 @@ async def login(user: UserLogin, response: Response, db: Session = Depends(get_d
 
 @app.get("/api/auth/profile", response_model=UserResponse)
 async def get_profile(authorization: Optional[str] = Header(None), db: Session = Depends(get_db)):
+    print(f"[API] GET /api/auth/profile - Fetching current user profile")
     current_user = get_current_user(request_authorization=authorization, db=db)
     return current_user
 
@@ -270,6 +276,7 @@ async def verify_auth(authorization: Optional[str] = None, db: Session = Depends
 # =====================================================================
 @app.get("/api/media/status")
 async def check_processing_status():
+    print(f"[API] GET /api/media/status - Current raw status dictionary in memory: {video_processing_status}")
     if not video_processing_status: return {"status": "idle", "raw_status": {}}
     statuses = list(video_processing_status.values())
     if "processing" in statuses: return {"status": "processing", "raw_status": video_processing_status}
@@ -323,7 +330,9 @@ def process_video_task(file_path: str, source_id: str, status_dict, frame_dict, 
 
 @app.post("/api/media/livestream")
 async def start_livestream(req: LivestreamRequest):
+    print(f"[API] POST /api/media/livestream - Incoming request to start streams: {[config.source_name for config in req.streams]}")
     active_streams = req.streams[:3] 
+
     
     for config in active_streams:
          print(f"🚀 LAUNCHING Thread for {config.source_name} (Collection: live_cctv_stream)")
@@ -363,6 +372,7 @@ async def get_stream_orientation(source_id: str):
 
 @app.post("/api/media/upload")
 async def upload_video(file: UploadFile = File(...)):
+    print(f"[API] POST /api/media/upload - Receiving file upload: {file.filename}")
     base_dir = os.path.abspath(os.curdir)
     save_dir = os.path.join(base_dir, "data", "videos")
     os.makedirs(save_dir, exist_ok=True)
@@ -397,7 +407,10 @@ async def upload_video(file: UploadFile = File(...)):
 
 @app.post("/api/query")
 async def manual_query(req: QueryRequest, db: Session = Depends(get_db)):
-    if not ml_engine: return {"response": "Warning: ML Engine not loaded."}
+    print(f"[API] POST /api/query - User requested search: '{req.query}'")
+    if not ml_engine: 
+        print("[API] POST /api/query - Warning: ML Engine not loaded.")
+        return {"response": "Warning: ML Engine not loaded."}
         
     try:
         source_id = last_active_source.value
@@ -427,6 +440,7 @@ async def detective_trace(req: QueryRequest, db: Session = Depends(get_db)):
     Detective Mode: Traces a suspect across all ingested cameras and builds a timeline report.
     This is for cross-camera lineage tracking.
     """
+    print(f"[API] POST /api/trace - Detective trace initiated for: '{req.query}'")
     if not ml_engine:
         return {"status": "error", "message": "ML Engine not loaded. Cannot perform trace."}
         
@@ -454,6 +468,7 @@ async def visual_suspect_search(
     Mugshot Search: Upload a photo of a suspect to find them in the footage!
     Now supports situational context (e.g. 'Find this person holding a laptop').
     """
+    print(f"[API] POST /api/search-image - Searching image '{file.filename}' with context: '{query}'")
     if not ml_engine:
         return {"status": "error", "message": "ML Engine not loaded. Cannot perform visual search."}
         
@@ -495,6 +510,7 @@ async def manual_speak(req: SpeakRequest):
 
 @app.post("/api/alerts/setup")
 async def setup_alert(rule: AlertRule, db: Session = Depends(get_db)):
+    print(f"[API] POST /api/alerts/setup - Adding new alert condition: '{rule.condition}'")
     db_rule = models.AlertRuleDB(condition=rule.condition)
     db.add(db_rule)
     db.commit()
@@ -544,6 +560,11 @@ async def background_alert_daemon():
             active_rules_count = db.query(models.AlertRuleDB).filter(models.AlertRuleDB.is_active == True).count()
             is_any_stream_active = any(status == "processing" for status in video_processing_status.values())
 
+            # DIAGNOSTIC LOG 1: Start of Cycle
+            print(f"[Daemon DEBUG] Start Cycle - Active Rules: {active_rules_count} | Active Streams: {is_any_stream_active}")
+            if not is_any_stream_active:
+                 print(f"[Daemon DEBUG] No active streams found in: {video_processing_status}")
+
             if active_rules_count == 0 or not is_any_stream_active:
                 db.close()
                 await asyncio.sleep(10) 
@@ -557,11 +578,14 @@ async def background_alert_daemon():
                 
                 if ml_engine:
                     try:
+                        print(f"[Daemon DEBUG] Querying AI for rule: {rule_text}")
                         result = ml_engine.query(rule_text, is_stream=True)
                         if result.get("status") != "error":
                             ai_response = result.get("response", "").lower()
+                            print(f"[Daemon DEBUG] Raw AI Response for '{rule_text}': {ai_response}")
                             
                             if "yes" in ai_response or "match found" in ai_response:
+                                print(f"✅ [Daemon DEBUG] MATCH FOUND for rule: {rule_text}")
                                 # now = time.time()
                                 # last_fired = rule_last_triggered.get(rule_db.id, 0)
                                 # if (now - last_fired) < 300: continue
@@ -572,6 +596,7 @@ async def background_alert_daemon():
                                 )
                                 db.add(new_log)
                                 db.commit()
+                                print(f"[Daemon DEBUG] Alert successfully saved to database.")
                                 
                                 send_telegram_alert(
                                     f"🚨 SECURITY ALERT 🚨\n\nRule: '{rule_text}'\n🔎 AI Notes: {new_log.ai_analysis}",
@@ -589,10 +614,17 @@ async def background_alert_daemon():
                                 
                                 threading.Thread(target=speak_alarm, args=(phrase,), daemon=True).start()
                                 rule_last_triggered[rule_db.id] = time.time()
+                            else:
+                                print(f"❌ [Daemon DEBUG] AI verified but said NO (or didn't use 'yes'/'match found')")
+                        else:
+                             print(f"⚠️ [Daemon DEBUG] ML Engine returned an error: {result.get('message')}")
                     except Exception as e:
                         if "429" in str(e) or "quota" in str(e).lower():
                             rule_db.is_active = False
                             db.commit()
+                            print(f"🛑 [Daemon DEBUG] Quota exceeded. Deactivating rule: {rule_text}")
+                        else:
+                             print(f"🛑 [Daemon DEBUG] Exception during ML query: {e}")
         finally:
             db.close()
                 

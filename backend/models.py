@@ -29,6 +29,8 @@ class TriggeredAlertDB(Base):
     rule_tested = Column(String)
     ai_analysis = Column(String)
     timestamp_seconds = Column(Integer)
+    video_source_id = Column(String, nullable=True)
+    created_at = Column(DateTime, default=datetime.datetime.utcnow)
 
 class QueryHistoryDB(Base):
     """
