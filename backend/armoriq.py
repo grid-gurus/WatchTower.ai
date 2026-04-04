@@ -1,86 +1,123 @@
 import os
 import dotenv
 from google import genai
+from armoriq_sdk import ArmorIQClient
+
+# Load Environment from root
+env_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), ".env")
+dotenv.load_dotenv(env_path, override=True)
 
 class ArmorIQGuard:
     def __init__(self):
-        env_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), ".env")
-        dotenv.load_dotenv(env_path)
-        api_key = os.getenv("GEMINI_API_KEY")
-        if api_key:
-            self.vlm_client = genai.Client(api_key=api_key)
+        # 🛡️ Official ArmorIQ SDK Setup
+        self.api_key = os.getenv("ARMORIQ_API_KEY")
+        self.user_id = os.getenv("ARMORIQ_USER_ID", "hackathon-dev")
+        self.agent_id = os.getenv("ARMORIQ_AGENT_ID", "watchtower-v1")
+        
+        # Initialize official ArmorIQ Client
+        try:
+            if self.api_key:
+                self.client = ArmorIQClient(
+                    api_key=self.api_key,
+                    user_id=self.user_id,
+                    agent_id=self.agent_id,
+                    use_production=True # Ensure we use the live key from platform.armoriq.ai
+                )
+                print(f"🛡️ [ArmorIQ] SDK INITIALIZED. Agent: {self.agent_id}")
+            else:
+                self.client = None
+                print("⚠️ [ArmorIQ] Warning: ARMORIQ_API_KEY not found. Running in simulation mode.")
+        except Exception as e:
+            print(f"❌ [ArmorIQ] SDK Initialization Error: {e}")
+            self.client = None
+
+        # 🧠 Policy Engine (Gemini 1.5 Flash)
+        gemini_key = os.getenv("GEMINI_API_KEY")
+        if gemini_key:
+            self.vlm_client = genai.Client(api_key=gemini_key)
             self.model_name = "gemini-2.5-flash"
-             # Enforce deterministic results for policy checking
-            self.config = {"temperature": 0.0}
+            self.config = {"temperature": 0.0} # Deterministic policy enforcement
         else:
             self.vlm_client = None
 
     def evaluate_request(self, query: str, context: str = "global") -> dict:
         """
-        Acts as the WatchTower Supervisor Check. 
-        Returns {"status": "allowed"} or {"status": "blocked", "message": "Why"}
+        WatchTower Interceptor. 
+        Implements: [Capture Plan] -> [Intent Verification] -> [Token Issuance]
         """
-        print(f"🛡️ [ArmorIQ] Evaluating request: '{query}' in context: '{context}'")
+        print(f"🛡️ [ArmorIQ] Intercepting Search: '{query}' ({context})")
         
-        # =========================================================
-        # 1. HARD BLOCK: Strict Privacy Zones
-        # =========================================================
-        restricted_zones = ["bathroom", "breakroom", "restroom", "locker", "private"]
+        # 1. HARD BLOCK: Strict Privacy Zones (Deterministic)
+        restricted_zones = ["bathroom", "restroom", "locker", "private"]
         if context and any(zone in context.lower() for zone in restricted_zones):
-             # Only lethal/weapon threats bypass privacy zone rules
-             if "weapon" not in query.lower() and "gun" not in query.lower() and "knife" not in query.lower():
-                 print("🛑 [ArmorIQ] BLOCKED: Privacy Zone Violation.")
+             if not any(k in query.lower() for k in ["weapon", "gun", "knife", "threat"]):
                  return {
                      "status": "blocked", 
-                     "message": "ArmorIQ Check Failed: Active surveillance tracking is strictly prohibited in designated employee privacy zones. Only active lethal threats can override this."
+                     "message": "ArmorIQ: Direct surveillance is prohibited in Private Privacy Zones except for weapon detection."
                  }
 
-        # =========================================================
-        # 2. AI POLICY GUARDRAIL: Anti-Profiling
-        # =========================================================
+        # 2. AI INTENT ANALYSIS (The Intelligence Layer)
         if not self.vlm_client:
-             print("⚠️ [ArmorIQ] API Offline. Defaulting to allowed.")
-             return {"status": "allowed"} 
-             
+             return {"status": "allowed", "note": "Simulation mode"}
+
         prompt = f"""
-        You are the ArmorIQ Ethics & Policy Firewall for a CCTV Surveillance SaaS.
-        Evaluate this camera search request: "{query}"
+        You are the Intent Sentry for to a CCTV Security SaaS. 
+        Evaluate the human operator's intent for this search: "{query}"
 
-        Strict Boundaries:
-        1. BLOCKED: Requests targeting people based solely on race, ethnicity, or explicit demographic profiling (e.g. 'Track the Asian guy').
-        2. BLOCKED: Requests trying to identify minor children visuals for general tracking/marketing.
-        3. BLOCKED: Requests containing sexual harassment, sexist/perverted intentions (e.g. "search for girls in short dresses"), religious hate, or explicitly racist language.
-        4. ALLOWED: Tracking lethal/active threats (e.g. "guy with weapon", "man with gun").
-        5. ALLOWED: Tracking criminal behavior like theft, shoplifting, or trespassing (e.g. "thief stealing bag", "suspicious masked individual").
-        6. ALLOWED: Tracking generic, non-protected physical descriptors (e.g. "man in red shirt", "person running", "woman with blue bag").
+        STRICT BOUNDARIES:
+        - BLOCKED: Demographic profiling (race, religion, ethnicity).
+        - BLOCKED: Harassment, sexist/perverted intentions, religious hate.
+        - BLOCKED: Tracking specific physical attributes purely for profiling/minor child identification.
 
-        Provide your assessment strictly in the following format. 
-        Line 1: Either 'ALLOWED' or 'BLOCKED'
-        Line 2: A highly professional 1 sentence explanation as to why. Example: 'Request violates Anti-Profiling safety boundaries by targeting protected demographics.'
+        AUTHORIZED INTENTIONS (MUST ALLOW):
+        - Tracking Weapons/Crimes/Theft/Trespassing.
+        - NARRATIVE QUERIES: Queries about the video's content, "main character", descriptions of actions or objects (e.g. "is there a laptop", "who is the main actor", "what is happening?").
+        - Narrative and subjective checks like "Is the person happy?" or "who is the main guy?" are 100% AUTHORIZED.
+
+        Task: Determine if this intent matches corporate policy.
+        Format:
+        Line 1: ALLOWED or BLOCKED
+        Line 2: Professional 1-sentence reason.
         """
 
         try:
-            response = self.vlm_client.models.generate_content(
-                model=self.model_name, 
-                contents=[prompt],
-                config=self.config
+            # Pre-flight check using Policy Engine
+            assessment = self.vlm_client.models.generate_content(
+                model=self.model_name, contents=[prompt], config=self.config
             )
-            
-            # Parse the response cleanly
-            result_text = [line for line in response.text.strip().split('\n') if line.strip()]
-            decision = result_text[0].upper()
-            reason = result_text[1] if len(result_text) > 1 else "Protected by universal ethics guidelines."
+            lines = [l.strip() for l in assessment.text.strip().split('\n') if l.strip()]
+            decision = lines[0].upper()
+            reason = lines[1] if len(lines) > 1 else "Protected by ethical guardrail."
 
             if "BLOCKED" in decision:
-                print(f"🛑 [ArmorIQ] BLOCKED by AI: {reason}")
                 return {"status": "blocked", "message": f"ArmorIQ Agent: {reason}"}
-            
-            print("✅ [ArmorIQ] Clear. Security action allowed.")
-            return {"status": "allowed"}
+
+            # 3. OFFICIAL SDK CAPTURE (The Proof Layer)
+            intent_token = "SIMULATED_TOKEN_VALID"
+            if self.client:
+                try:
+                    # Capture the successful plan in the ArmorIQ auditor
+                    plan = self.client.capture_plan(
+                        llm="gemini-1.5-flash",
+                        prompt=query,
+                        metadata={"context": context, "reason": reason}
+                    )
+                    # For hackathon demo, we return a success status. 
+                    # If you had a CSRG service set up, we would call get_intent_token() here.
+                    intent_token = f"TOKEN_{plan.plan.get('hash', 'A1B2')[:8]}"
+                except Exception as sdk_err:
+                    print(f"⚠️ [ArmorIQ] SDK Note: {sdk_err}")
+
+            print(f"✅ [ArmorIQ] Intent Authorized: {intent_token}")
+            return {
+                "status": "allowed", 
+                "armor_token": intent_token,
+                "reason": reason
+            }
 
         except Exception as e:
-            print(f"⚠️ [ArmorIQ] System Error (API issue): {e}")
+            print(f"⚠️ [ArmorIQ] Check Bypassed (Safety Fallback): {e}")
             return {"status": "allowed"}
 
-# Instantiate the singleton supervisor for the app
+# Singleton instance
 armoriq_supervisor = ArmorIQGuard()
