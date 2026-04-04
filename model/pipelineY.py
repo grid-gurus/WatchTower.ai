@@ -721,48 +721,97 @@ class OfflineVideoPipeline:
                        skip_vlm: bool = False) -> dict:
         """
         Maps target movement across all cameras.
+        Searches UPLOADED, LIVE, and default collections so footage
+        ingested via any path is always found.
         max_distance=2.0 matches teammate's high-recall setting (VLM does final verify).
         skip_vlm=True for fast dev iteration without burning quota.
-        Searches the default collection (set at init — usually cctv_main_stream).
         """
         print(f"\n[TRACING] Computing trajectory for '{text_query}'")
 
-        query_vec        = self._encode_text(text_query)
-        collection_name  = self.default_collection_name
+        query_vec = self._encode_text(text_query)
 
-        results = self._cuda_query(query_vec, top_k, None, collection_name)
-        if results is None:
-            col     = self._get_collection(collection_name)
-            results = col.query(
-                query_embeddings=[query_vec.cpu().tolist()],
-                n_results=top_k,
-                include=['metadatas', 'distances']
-            )
+        # ── Search ALL populated collections, not just the default empty one ──
+        collections_to_search = list(dict.fromkeys([
+            self.COLLECTION_UPLOADED,       # "uploaded_vault"   ← videos land here
+            self.COLLECTION_LIVE,           # "live_cctv_stream" ← streams land here
+            self.default_collection_name,   # "cctv_main_stream" ← legacy / manual
+        ]))
 
-        if not results['ids'] or not results['ids'][0]:
+        all_metadatas: list[dict] = []
+        all_distances: list[float] = []
+
+        for cname in collections_to_search:
+            try:
+                col = self._get_collection(cname)
+                if col.count() == 0:
+                    print(f"[TRACING] Skipping empty collection: [{cname}]")
+                    continue
+
+                print(f"[TRACING] Searching [{cname}] ({col.count()} frames)...")
+
+                # Try VRAM-resident cosine search first
+                results = self._cuda_query(query_vec, top_k, None, cname)
+
+                # Cold VRAM cache — fall back to ChromaDB
+                if results is None:
+                    results = col.query(
+                        query_embeddings=[query_vec.cpu().tolist()],
+                        n_results=min(top_k, col.count()),
+                        include=["metadatas", "distances"]
+                    )
+
+                if results and results["ids"] and results["ids"][0]:
+                    batch_meta = results["metadatas"][0]
+                    batch_dist = results.get(
+                        "distances",
+                        [[0.0] * len(batch_meta)]
+                    )[0]
+                    all_metadatas.extend(batch_meta)
+                    all_distances.extend(batch_dist)
+                    print(f"[TRACING] Found {len(batch_meta)} candidates in [{cname}]")
+
+            except Exception as e:
+                print(f"[TRACING] Skipping collection '{cname}': {e}")
+                continue
+
+        if not all_metadatas:
             return {"status": "error", "message": "Target not detected anywhere."}
 
-        metadatas = results['metadatas'][0]
-        distances = results.get('distances', [[0.0] * len(metadatas)])[0]
-
-        # Distance + file-existence guard
+        # ── Distance + file-existence guard ───────────────────────────────────
         valid_frames = [
             {
                 "source_id":  m["source_id"],
                 "timestamp":  m["timestamp"],
                 "frame_path": m["frame_path"],
-                "distance":   d
+                "distance":   d,
             }
-            for m, d in zip(metadatas, distances)
+            for m, d in zip(all_metadatas, all_distances)
             if d <= max_distance and os.path.exists(m["frame_path"])
         ]
 
         if not valid_frames:
-            return {"status": "error", "message": "No confident/existing target locks."}
+            # Distance filter might be too tight — log what we actually got
+            print(f"[TRACING] All {len(all_metadatas)} candidates filtered out. "
+                  f"Min distance seen: {min(all_distances):.4f}")
+            return {
+                "status":  "error",
+                "message": "No confident/existing target locks. "
+                           "Try a more specific query or re-upload the footage.",
+            }
 
+        # ── Deduplicate by frame_path (same frame can appear in multiple searches) ──
+        seen: set[str] = set()
+        deduped: list[dict] = []
+        for f in valid_frames:
+            if f["frame_path"] not in seen:
+                seen.add(f["frame_path"])
+                deduped.append(f)
+        valid_frames = deduped
+
+        # Sort chronologically
         valid_frames.sort(key=lambda x: x["timestamp"])
 
-        # Compress into timeline blocks (same camera, gap ≤ 60s)
+        # ── Compress into timeline blocks (same camera, gap ≤ 60 s) ──────────
         timeline: list[dict] = []
         current_block: dict | None = None
 
@@ -772,11 +821,13 @@ class OfflineVideoPipeline:
                     "source_id":  frame["source_id"],
                     "start_time": frame["timestamp"],
                     "end_time":   frame["timestamp"],
-                    "best_frame": frame["frame_path"]
+                    "best_frame": frame["frame_path"],
                 }
                 continue
+
             same_cam  = frame["source_id"] == current_block["source_id"]
             close_gap = (frame["timestamp"] - current_block["end_time"]) <= 60.0
+
             if same_cam and close_gap:
                 current_block["end_time"] = frame["timestamp"]
             else:
@@ -785,24 +836,39 @@ class OfflineVideoPipeline:
                     "source_id":  frame["source_id"],
                     "start_time": frame["timestamp"],
                     "end_time":   frame["timestamp"],
-                    "best_frame": frame["frame_path"]
+                    "best_frame": frame["frame_path"],
                 }
+
         if current_block:
             timeline.append(current_block)
 
-        if skip_vlm:
-            return {"status": "success", "target": text_query, "timeline_nodes": timeline}
+        print(f"[TRACING] Timeline built: {len(timeline)} node(s) across "
+              f"{len({b['source_id'] for b in timeline})} camera(s)")
 
+        if skip_vlm:
+            return {
+                "status":         "success",
+                "target":         text_query,
+                "timeline_nodes": timeline,
+            }
+
+        # ── VLM synthesis ─────────────────────────────────────────────────────
         vlm_content = [
-            "You are a master Surveillance Intelligence Agent specializing in cross-camera lineage tracking.",
+            "You are a master Surveillance Intelligence Agent specializing in "
+            "cross-camera lineage tracking.",
             f"User request: '{text_query}'.",
-            "Analyze every frame deeply. Synthesize a professional incident timeline detailing "
-            "where the target went, what they were doing, and their visible behavior across zones. "
-            "Act like a lead detective."
+            "Analyze every frame deeply. Synthesize a professional incident timeline "
+            "detailing where the target went, what they were doing, and their visible "
+            "behavior across zones. Act like a lead detective.",
         ]
         for idx, block in enumerate(timeline):
-            vlm_content.append(f"Event {idx+1} — Camera: {block['source_id']}")
-            vlm_content.append(self._resize_for_vlm(Image.open(block['best_frame'])))
+            vlm_content.append(
+                f"Event {idx + 1} — Camera: {block['source_id']} | "
+                f"Time window: {block['start_time']:.1f}s – {block['end_time']:.1f}s"
+            )
+            vlm_content.append(
+                self._resize_for_vlm(Image.open(block["best_frame"]))
+            )
         vlm_content.append(
             "Synthesize a strict, professional incident timeline detailing "
             "where the target went and what they were doing across these zones."
@@ -812,8 +878,9 @@ class OfflineVideoPipeline:
             "status":          "success",
             "target":          text_query,
             "incident_report": self._vlm_query(text_query, vlm_content),
-            "timeline_nodes":  timeline
+            "timeline_nodes":  timeline,
         }
+
 
     # ──────────────────────────────────────────────────────────────────────────
     # Reverse image search — fully CUDA-accelerated with multimodal fusion kernel
