@@ -44,7 +44,12 @@ export default function MinimalNavbar() {
       setAlertLogsError("");
 
       try {
-        const res = await fetch("http://127.0.0.1:8000/api/alerts/logs");
+        const token = localStorage.getItem("access_token");
+        const res = await fetch("http://localhost:8000/api/alerts/logs", {
+          headers: {
+            "Authorization": `Bearer ${token}`
+          }
+        });
 
         if (!res.ok) {
           const text = await res.text();
@@ -103,7 +108,7 @@ export default function MinimalNavbar() {
         {/* Left: Logo */}
         <Link to="/" className="flex items-center justify-start gap-3">
           <h1 className="text-xl md:text-2xl font-bold bg-gradient-to-r from-cyan-400 via-blue-500 to-purple-500 bg-clip-text text-transparent shrink-0">
-            CCTV AI
+            WatchTower AI
           </h1>
         </Link>
 
@@ -120,7 +125,7 @@ export default function MinimalNavbar() {
               to="/tripwires"
               className="bg-gradient-to-r from-white to-gray-400 bg-clip-text text-transparent hover:from-cyan-400 hover:to-purple-500 transition"
             >
-              Tripwires
+              Alerts
             </Link>
           </div>
         )}

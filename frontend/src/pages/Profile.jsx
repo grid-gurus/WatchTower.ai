@@ -25,7 +25,7 @@ export default function Profile() {
           return;
         }
 
-        const res = await fetch("http://127.0.0.1:8000/api/auth/profile", {
+        const res = await fetch("http://localhost:8000/api/auth/profile", {
           method: "GET",
           headers: {
             "Content-Type": "application/json",
@@ -71,7 +71,7 @@ export default function Profile() {
 
       addToast("Saving profile...", "info", 1000);
 
-      const res = await fetch("http://127.0.0.1:8000/api/auth/profile", {
+      const res = await fetch("http://localhost:8000/api/auth/profile", {
         method: "PUT",
         headers: {
           "Content-Type": "application/json",

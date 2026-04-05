@@ -6,9 +6,11 @@ import UploadDropzone from "../components/UploadDropZone";
 import Navbar from "../components/Navbar";
 import useAlertStore from "../store/useAlertStore";
 import FramePlayer from "../components/FramePlayer";
+import useAppStore from "../store/useAppStore";
 
 export default function Dashboard() {
   const [mediaMode, setMediaMode] = useState(false);
+  const frameBasePath = useAppStore((state) => state.frameBasePath);
 
   const addNotification = useAlertStore((s) => s.addNotification);
 
@@ -66,7 +68,7 @@ export default function Dashboard() {
       <div className="relative z-10 flex h-[calc(100vh-80px)] px-4 md:px-6 pt-24 gap-4">
 
         {/* LEFT PANEL */}
-        <div className="flex-1 min-w-0 p-[1.5px] rounded-xl bg-gradient-to-r from-cyan-400 to-purple-500 shadow-lg shadow-cyan-500/10">
+        <div className={`transition-all duration-500 ${frameBasePath ? "flex-1" : "w-full max-w-3xl mx-auto"} min-w-0 p-[1.5px] rounded-xl bg-gradient-to-r from-cyan-400 to-purple-500 shadow-lg shadow-cyan-500/10`}>
 
           <div className="h-full bg-black rounded-xl flex flex-col">
 
@@ -94,32 +96,34 @@ export default function Dashboard() {
           </div>
         </div>
 
-        {/* RIGHT PANEL */}
-        <div className="flex-1 min-w-0 p-[1.5px] rounded-xl bg-gradient-to-r from-cyan-400 to-purple-500 shadow-lg shadow-purple-500/10">
+        {/* RIGHT PANEL - Only show when frameBasePath is set */}
+        {frameBasePath && (
+          <div className="flex-1 min-w-0 p-[1.5px] rounded-xl bg-gradient-to-r from-cyan-400 to-purple-500 shadow-lg shadow-purple-500/10">
 
-          <div className="h-full bg-black rounded-xl flex flex-col">
+            <div className="h-full bg-black rounded-xl flex flex-col">
 
-            {/* Header */}
-            <div className="px-4 py-3 border-b border-white/10 flex justify-between items-center">
-              <span className="text-sm text-gray-400">
-                📹 {mediaMode
-                  ? "Uploaded Video"
-                  : "Smart Video Feed"}
-              </span>
+              {/* Header */}
+              <div className="px-4 py-3 border-b border-white/10 flex justify-between items-center">
+                <span className="text-sm text-gray-400">
+                  📹 {mediaMode
+                    ? "Uploaded Video"
+                    : "Smart Video Feed"}
+                </span>
 
-              <span className="text-xs text-green-400 animate-pulse">
-                ● LIVE
-              </span>
+                <span className="text-xs text-green-400 animate-pulse">
+                  ● LIVE
+                </span>
+              </div>
+
+              {/* Video */}
+              <div className="flex-1 flex items-center justify-center overflow-hidden">
+                {/* <VideoPlayer /> */}
+                <FramePlayer />
+              </div>
+
             </div>
-
-            {/* Video */}
-            <div className="flex-1 flex items-center justify-center overflow-hidden">
-              {/* <VideoPlayer /> */}
-              <FramePlayer />
-            </div>
-
           </div>
-        </div>
+        )}
 
       </div>
     </div>

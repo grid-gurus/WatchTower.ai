@@ -55,7 +55,7 @@ export default function Navbar() {
       }
       try {
         const token = localStorage.getItem("access_token");
-        const res = await fetch("http://127.0.0.1:8000/api/auth/profile", {
+        const res = await fetch("http://localhost:8000/api/auth/profile", {
           headers: { Authorization: `Bearer ${token}` }
         });
         if (res.ok) {
@@ -83,7 +83,12 @@ export default function Navbar() {
       setHistoryError("");
 
       try {
-        const res = await fetch("http://127.0.0.1:8000/api/query/history");
+        const token = localStorage.getItem("access_token");
+        const res = await fetch("http://localhost:8000/api/query/history", {
+          headers: {
+            "Authorization": `Bearer ${token}`
+          }
+        });
 
         if (!res.ok) {
           const text = await res.text();
@@ -118,7 +123,12 @@ export default function Navbar() {
       setAlertLogsError("");
 
       try {
-        const res = await fetch("http://127.0.0.1:8000/api/alerts/logs");
+        const token = localStorage.getItem("access_token");
+        const res = await fetch("http://localhost:8000/api/alerts/logs", {
+          headers: {
+            "Authorization": `Bearer ${token}`
+          }
+        });
 
         if (!res.ok) {
           const text = await res.text();
@@ -153,7 +163,12 @@ export default function Navbar() {
     if (!isLoggedIn) return;
     setActiveRulesLoading(true);
     try {
-      const res = await fetch("http://127.0.0.1:8000/api/alerts/active");
+      const token = localStorage.getItem("access_token");
+      const res = await fetch("http://localhost:8000/api/alerts/active", {
+        headers: {
+          "Authorization": `Bearer ${token}`
+        }
+      });
       if (res.ok) {
         const data = await res.json();
         setActiveRules(data.rules || []);
@@ -171,8 +186,12 @@ export default function Navbar() {
 
   const handleDeleteRule = async (ruleId) => {
     try {
-      const res = await fetch(`http://127.0.0.1:8000/api/alerts/${ruleId}`, {
-        method: "DELETE"
+      const token = localStorage.getItem("access_token");
+      const res = await fetch(`http://localhost:8000/api/alerts/${ruleId}`, {
+        method: "DELETE",
+        headers: {
+          "Authorization": `Bearer ${token}`
+        }
       });
       if (res.ok) {
         // Refresh the list
@@ -274,7 +293,7 @@ export default function Navbar() {
             </button>
 
             <h1 className="text-xl md:text-2xl font-bold bg-gradient-to-r from-cyan-400 via-blue-500 to-purple-500 bg-clip-text text-transparent shrink-0">
-              CCTV AI
+              WatchTower AI
             </h1>
           </div>
 
@@ -301,7 +320,7 @@ export default function Navbar() {
                 to="/tripwires"
                 className="bg-gradient-to-r from-white to-gray-400 bg-clip-text text-transparent hover:from-cyan-400 hover:to-purple-500 transition"
               >
-                Tripwires
+                Live Alerts
               </Link>
             )}
             {location.pathname !== "/livestream" && (

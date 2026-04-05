@@ -14,7 +14,7 @@ export default function UploadDropzone() {
     const setVideoUrl = useAppStore((state) => state.setVideoUrl);
 
     const checkLoginAndUpload = () => {
-        const token = localStorage.getItem("token");
+        const token = localStorage.getItem("access_token");
 
         if (!token) {
             setMessage("🔒 Redirecting to login...");
@@ -57,7 +57,7 @@ export default function UploadDropzone() {
         e.preventDefault();
         setDragging(false);
 
-        const token = localStorage.getItem("token");
+        const token = localStorage.getItem("access_token");
         if (!token) {
             navigate("/login");
             return;
