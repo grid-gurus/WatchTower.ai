@@ -26,7 +26,7 @@ class OfflineVideoPipeline:
         self.collection = self.chroma_client.get_or_create_collection(name=collection_name)
         
         self.vlm_client = genai.Client(api_key=api_key)
-        self.vlm_model_name = "gemini-2.5-flash" # Use high-end model for complex reasoning
+        self.vlm_model_name = "gemini-2.5" # Use high-end model for complex reasoning
         self.io_pool = concurrent.futures.ThreadPoolExecutor(max_workers=8)
         
         self.ai_queue = queue.Queue(maxsize=128)

@@ -43,17 +43,34 @@ class ArmorIQGuard:
     def evaluate_request(self, query: str, context: str = "global") -> dict:
         """
         WatchTower Interceptor. 
-        Implements: [Capture Plan] -> [Intent Verification] -> [Token Issuance]
+        Implements: [Local Hard Block] -> [Capture Plan] -> [Intent Verification]
         """
         print(f"🛡️ [ArmorIQ] Intercepting Search: '{query}' ({context})")
+        logic_query = query.lower()
+
+        # --- 🛡️ LAYER 1: DETERMINISTIC LOCAL BLOCKS (Always First) ---
+        # These are high-risk attributes that must be blocked regardless of AI decision.
+        hard_blocks = {
+            "demographics": ["religion", "race", "ethnic", "caste", "nationality", "muslim", "hindu", "christian", "black", "white"],
+            "gender/ethics": ["girl", "woman", "bikini", "dress", "shorts", "sexy", "beautiful", "hottie", "men", "boy", "naked", "nude"],
+            "privacy": ["zoom", "face", "closer", "identifier", "follow"]
+        }
         
-        # 1. HARD BLOCK: Strict Privacy Zones (Deterministic)
+        for category, keywords in hard_blocks.items():
+            if any(word in logic_query for word in keywords):
+                print(f"🚫 [ArmorIQ] DETERMINISTIC BLOCK: '{category}' category detected in query.")
+                return {
+                    "status": "blocked", 
+                    "message": f"ArmorIQ Guard: Query contains restricted descriptive attributes ({category}) which are prohibited under ethical guidelines."
+                }
+
+        # 1. Privacy Zone Check
         restricted_zones = ["bathroom", "restroom", "locker", "private"]
         if context and any(zone in context.lower() for zone in restricted_zones):
-             if not any(k in query.lower() for k in ["weapon", "gun", "knife", "threat"]):
+             if not any(k in logic_query for k in ["weapon", "gun", "knife", "threat"]):
                  return {
                      "status": "blocked", 
-                     "message": "ArmorIQ: Direct surveillance is prohibited in Private Privacy Zones except for weapon detection."
+                     "message": "ArmorIQ: Direct surveillance is prohibited in Private Privacy Zones."
                  }
 
         # 2. AI INTENT ANALYSIS (The Intelligence Layer)
@@ -62,22 +79,14 @@ class ArmorIQGuard:
 
         prompt = f"""
         You are the Intent Sentry for to a CCTV Security SaaS. 
-        Evaluate the human operator's intent for this search: "{query}"
+        Evaluate the human operator's intent: "{query}"
 
         STRICT BOUNDARIES:
-        - BLOCKED: Demographic profiling (race, religion, ethnicity).
-        - BLOCKED: Harassment, sexist/perverted intentions, religious hate.
-        - BLOCKED: Tracking specific physical attributes purely for profiling/minor child identification.
+        - BLOCKED: Demographic profiling or tracking specific people by clothes/gender alone.
+        - BLOCKED: Identifying children or harassment.
+        - AUTHORIZED: Tracking Crimes, Weapons, or generic Narrative descriptions (e.g. "what is happening").
 
-        AUTHORIZED INTENTIONS (MUST ALLOW):
-        - Tracking Weapons/Crimes/Theft/Trespassing.
-        - NARRATIVE QUERIES: Queries about the video's content, "main character", descriptions of actions or objects (e.g. "is there a laptop", "who is the main actor", "what is happening?").
-        - Narrative and subjective checks like "Is the person happy?" or "who is the main guy?" are 100% AUTHORIZED.
-
-        Task: Determine if this intent matches corporate policy.
-        Format:
-        Line 1: ALLOWED or BLOCKED
-        Line 2: Professional 1-sentence reason.
+        Task: Return only 'ALLOWED' or 'BLOCKED' on line 1, followed by a reason.
         """
 
         try:
@@ -96,14 +105,11 @@ class ArmorIQGuard:
             intent_token = "SIMULATED_TOKEN_VALID"
             if self.client:
                 try:
-                    # Capture the successful plan in the ArmorIQ auditor
                     plan = self.client.capture_plan(
                         llm="gemini-1.5-flash",
                         prompt=query,
                         metadata={"context": context, "reason": reason}
                     )
-                    # For hackathon demo, we return a success status. 
-                    # If you had a CSRG service set up, we would call get_intent_token() here.
                     intent_token = f"TOKEN_{plan.plan.get('hash', 'A1B2')[:8]}"
                 except Exception as sdk_err:
                     print(f"⚠️ [ArmorIQ] SDK Note: {sdk_err}")
@@ -116,8 +122,10 @@ class ArmorIQGuard:
             }
 
         except Exception as e:
-            print(f"⚠️ [ArmorIQ] Check Bypassed (Safety Fallback): {e}")
-            return {"status": "allowed"}
+            print(f"⚠️ [ArmorIQ] Cloud Check Failed: {e}")
+            # If AI is down, we already passed the Layer 1 check above, 
+            # so we allow for safety unless it's a known bad query.
+            return {"status": "allowed", "note": "Local fallback check only."}
 
 # Singleton instance
 armoriq_supervisor = ArmorIQGuard()
