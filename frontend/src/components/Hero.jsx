@@ -12,7 +12,7 @@ export default function Hero() {
       <div className="absolute inset-0 scan-line opacity-30"></div>
 
       {/* Content */}
-      <div className="relative z-10 flex flex-col items-center justify-center min-h-screen text-center px-4 sm:px-6 pt-32 sm:pt-40 pb-20">
+      <div className="relative z-10 flex flex-col items-center justify-center text-center px-4 sm:px-6 sm:pt-30 pb-20">
 
         {/* Top Badge */}
         <div className="mb-6 sm:mb-8 px-4 sm:px-6 py-2 border border-[#D4AF37] bg-[#D4AF37]/10 text-[#D4AF37] text-xs sm:text-sm font-semibold tracking-[0.15em] uppercase inline-flex items-center gap-2">
@@ -79,10 +79,10 @@ export default function Hero() {
       </div>
 
       {/* Corner Tactical Markers */}
-      <div className="absolute top-4 left-4 w-12 h-12 border-l-2 border-t-2 border-[#D4AF37] opacity-40"></div>
-      <div className="absolute top-4 right-4 w-12 h-12 border-r-2 border-t-2 border-[#D4AF37] opacity-40"></div>
-      <div className="absolute bottom-4 left-4 w-12 h-12 border-l-2 border-b-2 border-[#D4AF37] opacity-40"></div>
-      <div className="absolute bottom-4 right-4 w-12 h-12 border-r-2 border-b-2 border-[#D4AF37] opacity-40"></div>
+      <div className="absolute top-20 left-4 w-12 h-12 border-l-2 border-t-2 border-[#D4AF37] opacity-40"></div>
+      <div className="absolute top-20 right-4 w-12 h-12 border-r-2 border-t-2 border-[#D4AF37] opacity-40"></div>
+      <div className="absolute bottom-13 left-4 w-12 h-12 border-l-2 border-b-2 border-[#D4AF37] opacity-40"></div>
+      <div className="absolute bottom-13 right-4 w-12 h-12 border-r-2 border-b-2 border-[#D4AF37] opacity-40"></div>
 
     </div>
   )
