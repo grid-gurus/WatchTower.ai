@@ -21,7 +21,7 @@ const useAppStore = create((set) => ({
   // 🔥 Handle backend query response (FRAMES ONLY)
   playFromQuery: (data) =>
     set({
-      frameBasePath: `http://localhost:8000/data/frames/${data.source_id}`,
+      frameBasePath: `${import.meta.env.VITE_API_URL}/data/frames/${data.source_id}`,
       clipStart: Math.floor(data.clip_start),
       clipEnd: Math.ceil(data.clip_end),
       currentFrameTime: Math.floor(data.clip_start),

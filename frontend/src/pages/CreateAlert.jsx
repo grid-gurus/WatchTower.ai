@@ -12,7 +12,7 @@ export default function CreateAlert() {
         try {
             setLoading(true);
 
-            await axios.post("http://localhost:8000/api/alerts/setup", {
+            await axios.post(`${import.meta.env.VITE_API_URL}/api/alerts/setup`, {
                 condition,
             });
 

@@ -40,7 +40,7 @@ export default function UploadDropzone() {
             setLoading(true);
             setMessage("Uploading video... 🚀");
 
-            await axios.post("http://localhost:8000/api/media/upload", formData);
+            await axios.post(`${import.meta.env.VITE_API_URL}/api/media/upload`, formData);
 
             const localUrl = URL.createObjectURL(file);
             setVideoUrl(localUrl);
@@ -79,7 +79,7 @@ export default function UploadDropzone() {
     const pollStatus = async () => {
         const interval = setInterval(async () => {
             try {
-                const res = await axios.get("http://localhost:8000/api/media/status");
+                const res = await axios.get(`${import.meta.env.VITE_API_URL}/api/media/status`);
 
                 if (res.data.status === "completed") {
                     console.log(res);

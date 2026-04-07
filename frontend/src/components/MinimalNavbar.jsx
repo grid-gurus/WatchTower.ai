@@ -45,7 +45,7 @@ export default function MinimalNavbar() {
 
       try {
         const token = localStorage.getItem("access_token");
-        const res = await fetch("http://localhost:8000/api/alerts/logs", {
+        const res = await fetch(`${import.meta.env.VITE_API_URL}/api/alerts/logs`, {
           headers: {
             "Authorization": `Bearer ${token}`
           }

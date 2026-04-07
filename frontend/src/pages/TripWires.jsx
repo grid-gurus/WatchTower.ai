@@ -13,7 +13,7 @@ export default function TripWires() {
   // 🔌 WEBSOCKET CONNECTION: Listen for live AI alerts from the backend
   useEffect(() => {
     console.log("Connecting to WatchTower WebSocket...");
-    const socket = new WebSocket("ws://localhost:8000/ws/alerts");
+    const socket = new WebSocket(`${import.meta.env.VITE_API_URL.replace("https://","wss://").replace("http://","ws://")}/ws/alerts`);
 
     socket.onmessage = (event) => {
       const data = JSON.parse(event.data);
@@ -40,7 +40,7 @@ export default function TripWires() {
 
     try {
       // 🔥 POST request to backend
-      const res = await fetch("http://localhost:8000/api/alerts/setup", {
+      const res = await fetch(`${import.meta.env.VITE_API_URL}/api/alerts/setup`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",

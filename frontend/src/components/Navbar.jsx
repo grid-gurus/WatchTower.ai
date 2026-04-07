@@ -55,7 +55,7 @@ export default function Navbar() {
       }
       try {
         const token = localStorage.getItem("access_token");
-        const res = await fetch("http://localhost:8000/api/auth/profile", {
+        const res = await fetch(`${import.meta.env.VITE_API_URL}/api/auth/profile`, {
           headers: { Authorization: `Bearer ${token}` }
         });
         if (res.ok) {
@@ -84,7 +84,7 @@ export default function Navbar() {
 
       try {
         const token = localStorage.getItem("access_token");
-        const res = await fetch("http://localhost:8000/api/query/history", {
+        const res = await fetch(`${import.meta.env.VITE_API_URL}/api/query/history`, {
           headers: {
             "Authorization": `Bearer ${token}`
           }
@@ -124,7 +124,7 @@ export default function Navbar() {
 
       try {
         const token = localStorage.getItem("access_token");
-        const res = await fetch("http://localhost:8000/api/alerts/logs", {
+        const res = await fetch(`${import.meta.env.VITE_API_URL}/api/alerts/logs`, {
           headers: {
             "Authorization": `Bearer ${token}`
           }
@@ -164,7 +164,7 @@ export default function Navbar() {
     setActiveRulesLoading(true);
     try {
       const token = localStorage.getItem("access_token");
-      const res = await fetch("http://localhost:8000/api/alerts/active", {
+      const res = await fetch(`${import.meta.env.VITE_API_URL}/api/alerts/active`, {
         headers: {
           "Authorization": `Bearer ${token}`
         }
@@ -187,7 +187,7 @@ export default function Navbar() {
   const handleDeleteRule = async (ruleId) => {
     try {
       const token = localStorage.getItem("access_token");
-      const res = await fetch(`http://localhost:8000/api/alerts/${ruleId}`, {
+      const res = await fetch(`${import.meta.env.VITE_API_URL}/api/alerts/${ruleId}`, {
         method: "DELETE",
         headers: {
           "Authorization": `Bearer ${token}`

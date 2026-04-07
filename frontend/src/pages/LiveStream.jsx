@@ -23,7 +23,7 @@ export default function LiveStream() {
         const newOrientations = { ...orientations };
         try {
           await Promise.all(activeStreams.map(async (stream) => {
-            const res = await axios.get(`http://localhost:8000/api/media/orientation/${stream.name}`);
+            const res = await axios.get(`${import.meta.env.VITE_API_URL}/api/media/orientation/${stream.name}`);
             newOrientations[stream.name] = res.data.orientation;
           }));
           setOrientations(newOrientations);
@@ -48,7 +48,7 @@ export default function LiveStream() {
 
     setLoading(true);
     try {
-      const res = await axios.post("http://localhost:8000/api/media/livestream", {
+      const res = await axios.post(`${import.meta.env.VITE_API_URL}/api/media/livestream`, {
         streams: currentStreams.map(s => ({ stream_url: s.url, source_name: s.name }))
       });
 
@@ -169,7 +169,7 @@ export default function LiveStream() {
                         `}
                       >
                         <img 
-                          src={`http://localhost:8000/api/media/stream/${stream.name}`} 
+                          src={`${import.meta.env.VITE_API_URL}/api/media/stream/${stream.name}`} 
                           alt={stream.name}
                           className={`w-full h-full ${isPortrait ? "object-contain" : "object-cover"}`}
                         />

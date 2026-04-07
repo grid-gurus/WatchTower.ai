@@ -17,7 +17,7 @@ export default function MyProfile() {
             }
 
             try {
-                const res = await axios.get("http://localhost:8000/api/auth/profile", {
+                const res = await axios.get(`${import.meta.env.VITE_API_URL}/api/auth/profile`, {
                     headers: { Authorization: `Bearer ${token}` }
                 });
                 setUser(res.data);

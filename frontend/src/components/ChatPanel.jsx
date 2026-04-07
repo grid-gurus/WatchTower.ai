@@ -36,7 +36,7 @@ export default function ChatPanel() {
   const handleSpeak = async (text, id) => {
     try {
       setSpeakingId(id);
-      await axios.post("http://localhost:8000/api/speak", { text });
+      await axios.post(`${import.meta.env.VITE_API_URL}/api/speak`, { text });
       setTimeout(() => setSpeakingId(null), 2000);
     } catch (err) {
       console.error("Speech failed:", err);
@@ -69,15 +69,15 @@ export default function ChatPanel() {
         formData.append("file", currentFile);
         if (currentInput) formData.append("query", currentInput);
         
-        res = await axios.post("http://localhost:8000/api/search-image", formData, {
+        res = await axios.post(`${import.meta.env.VITE_API_URL}/api/search-image`, formData, {
           headers: { "Content-Type": "multipart/form-data" }
         });
       } else if (searchMode === "deep") {
-        res = await axios.post("http://localhost:8000/api/trace", {
+        res = await axios.post(`${import.meta.env.VITE_API_URL}/api/trace`, {
           query: currentInput,
         });
       } else {
-        res = await axios.post("http://localhost:8000/api/query", {
+        res = await axios.post(`${import.meta.env.VITE_API_URL}/api/query`, {
           query: currentInput,
         });
       }
