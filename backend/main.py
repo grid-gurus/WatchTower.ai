@@ -462,9 +462,8 @@ async def detective_trace(req: QueryRequest, db: Session = Depends(get_db)):
         
     try:
         source_id = last_active_source.value
-        is_live = source_id in active_stream_info and active_stream_info[source_id].startswith("http")
         # Pass the query to the Detective Trace engine
-        result = ml_engine.track_timeline(req.query, is_stream=is_live)
+        result = ml_engine.track_timeline(req.query)
         
         # We can also save this to history if needed, but for now we'll just return it
         return result
@@ -510,8 +509,7 @@ async def visual_suspect_search(
             
         # 🕵️ Call the ML "Reverse Image" Kernel (Now with text fusion!)
         source_id = last_active_source.value
-        is_live = source_id in active_stream_info and active_stream_info[source_id].startswith("http")
-        result = ml_engine.find_suspect_by_image(img_path, text_query=query, is_stream=is_live)
+        result = ml_engine.find_suspect_by_image(img_path, text_query=query)
         
         return result
         
@@ -773,16 +771,13 @@ def speak_alarm(phrase: str):
             # --- Primary Engine: ElevenLabs ---
             eleven_key = os.getenv("ELEVENLABS_API_KEY")
             if eleven_key:
-                from elevenlabs.client import ElevenLabs
-                from elevenlabs.play import play
-                
                 try:
+                    from elevenlabs.client import ElevenLabs
+                    from elevenlabs.play import play
+                    
                     print("🎧 [Voice Engine] Attempting ElevenLabs API...")
                     client = ElevenLabs(api_key=eleven_key)
                     audio = client.text_to_speech.convert(
-                        # Voice ID "JBFqnCBcs681mvg0GPOe" is a good authoritative default, 
-                        # but we can use the library's default by not asserting a specific complex ID if unsure.
-                        # Using 'Roger' (CwhRBWXzGAHq8TQ4Fs17) - Authoritative voice
                         voice_id="CwhRBWXzGAHq8TQ4Fs17", 
                         text=clean_phrase,
                         model_id="eleven_multilingual_v2",
