@@ -171,6 +171,7 @@ last_active_source = TrackedValue("")
 rule_last_triggered = {} 
 new_frame_events = {} 
 main_loop = None # Will store the asyncio event loop
+global_suspect_tracker = {}
 
 # =====================================================================
 # 3. DATA MODELS
@@ -441,6 +442,8 @@ async def manual_query(req: QueryRequest, db: Session = Depends(get_db)):
             
         return result
     except Exception as e:
+        import traceback
+        traceback.print_exc()
         return {"status": "error", "message": "Crash occurred.", "developer_details": str(e)}
 
 @app.post("/api/trace")
@@ -602,14 +605,18 @@ async def background_alert_daemon():
                 if ml_engine:
                     try:
                         search_bound = time.time() - 30.0
+                        with open("daemon_debug.txt", "a") as f: f.write(f"[{time.strftime('%H:%M:%S')}] Querying rule '{rule_text}' on live stream...\n")
                         result = ml_engine.query(rule_text, is_stream=True, min_timestamp=search_bound)
                         
+                        with open("daemon_debug.txt", "a") as f: f.write(f"[{time.strftime('%H:%M:%S')}] Query result status: {result.get('status')}. Msg: {result.get('message', '')}\n")
                         if result.get("status") != "error":
                             ai_response = result.get("response", "").lower()
+                            with open("daemon_debug.txt", "a") as f: f.write(f"[{time.strftime('%H:%M:%S')}] AI Response: {ai_response}\n")
                             
-                            if "yes" in ai_response or "match found" in ai_response:
+                            if "yes" in ai_response or "match found" in ai_response or "confirmed" in ai_response or "true" in ai_response:
                                 current_cam = result.get("source_id")
                                 last_seen_cam = global_suspect_tracker.get(rule_text)
+                                with open("daemon_debug.txt", "a") as f: f.write(f"[{time.strftime('%H:%M:%S')}] Match confirmed! Cam: {current_cam}\n")
                                 
                                 # === STATE 1: INITIAL DISCOVERY ===
                                 if last_seen_cam is None:

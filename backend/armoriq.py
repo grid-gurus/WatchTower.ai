@@ -35,7 +35,7 @@ class ArmorIQGuard:
         gemini_key = os.getenv("GEMINI_API_KEY")
         if gemini_key:
             self.vlm_client = genai.Client(api_key=gemini_key)
-            self.model_name = "gemini-2.5-flash"
+            self.model_name = "gemini-1.5-flash"
             self.config = {"temperature": 0.0} # Deterministic policy enforcement
         else:
             self.vlm_client = None

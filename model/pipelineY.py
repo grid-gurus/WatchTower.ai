@@ -212,7 +212,7 @@ class OfflineVideoPipeline:
 
         # ── VLM ──────────────────────────────────────────────────────────────
         self.vlm_client     = genai.Client(api_key=api_key)
-        self.vlm_model_name = "gemini-2.5-flash-lite"
+        self.vlm_model_name = "gemini-2.5-flash"
         self._vlm_cache: dict[str, str] = {}
 
         # ── Async I/O pool ───────────────────────────────────────────────────
@@ -466,7 +466,12 @@ class OfflineVideoPipeline:
 
             if count % frame_interval == 0:
                 timestamp  = count / fps
-                frame_path = f"./data/frames/{source_id}/t_{timestamp:.1f}.jpg"
+                if collection_name == self.COLLECTION_LIVE:
+                    timestamp = time.time()
+                    frame_path = f"./data/frames/{source_id}/live_{int(timestamp)}.jpg"
+                else:
+                    frame_path = f"./data/frames/{source_id}/t_{timestamp:.1f}.jpg"
+                    
                 metadata   = {
                     "source_id": source_id,
                     "timestamp": timestamp,
