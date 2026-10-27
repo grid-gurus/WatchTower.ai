@@ -27,7 +27,6 @@ from backend.auth import (
     TokenResponse,
     TokenRequest
 )
-from backend.superplane_client import superplane
 # =====================================================================
 # 1. SETUP & ALIGNMENT WITH ML TEAMMATE
 # =====================================================================
@@ -62,6 +61,7 @@ notifier = ConnectionManager()
 os.makedirs("data", exist_ok=True)
 os.makedirs("data/frames", exist_ok=True)
 os.makedirs("data/videos", exist_ok=True)
+os.makedirs("data/vector_db", exist_ok=True)
 
 app = FastAPI(title="WatchTower.ai Backend")
 
@@ -623,28 +623,34 @@ async def background_alert_daemon():
                                     print(f"🚨 [NEW THREAT DETECTED] -> {rule_text} @ {current_cam}")
                                     global_suspect_tracker[rule_text] = current_cam
                                     
-                                    # Alert SuperPlane to spin up Jira/Incidents
-                                    superplane.alert_anomaly_spotted(
-                                        rule_condition=rule_text, source_camera=current_cam,
-                                        ai_analysis=result.get("response", "Matched."),
-                                        image_url=result.get("frame_path")
+                                    # Send Telegram alert directly
+                                    alert_text = (
+                                        f"🚁 OVERWATCH EVENT: Suspect Anomaly Spotted 🚨\n"
+                                        f"Rule triggered: {rule_text}\n"
+                                        f"Location: {current_cam}\n\n"
+                                        f"AI Analysis: {result.get('response', 'Matched.')}"
                                     )
+                                    send_telegram_alert(alert_text, result.get("frame_path"))
                                     
-                                    os.system(f'say "Intruder Alert. Security breach at {current_cam}!" &')
+                                    # Standardized offline TTS voice alert
+                                    speak_alarm(f"Intruder Alert. Security breach at {current_cam}!")
                                 
                                 # === STATE 2: TARGET MOVING ACROSS CAMERAS ===
                                 elif current_cam != last_seen_cam:
                                     print(f"🚁 [LIVE OVERWATCH] Target {rule_text} transitioned: {last_seen_cam} -> {current_cam}")
                                     
-                                    # Tell SuperPlane to ping Telegram with the location change
-                                    superplane.alert_suspect_tracking(
-                                        suspect_profile=rule_text, 
-                                        new_camera_id=current_cam, 
-                                        old_camera_id=last_seen_cam
+                                    # Send Telegram alert directly with transition status
+                                    alert_text = (
+                                        f"🚁 OVERWATCH EVENT: Suspect Transition Matrix Detected 🚨\n"
+                                        f"Target Identifier: {rule_text}\n"
+                                        f"Sector Matrix transition: From [{last_seen_cam}] into [{current_cam}]"
                                     )
+                                    send_telegram_alert(alert_text, result.get("frame_path"))
                                     
                                     global_suspect_tracker[rule_text] = current_cam
-                                    os.system(f'say "Update. Target shifted from {last_seen_cam} to {current_cam}!" &')
+                                    
+                                    # Standardized offline TTS voice alert
+                                    speak_alarm(f"Update. Target shifted from {last_seen_cam} to {current_cam}!")
                                 
                                 # WE DO NOT DEACTIVATE THE RULE (rule_db.is_active = False)
                                 # Keep it True so we track the attacker infinitely across the facility!
@@ -655,88 +661,6 @@ async def background_alert_daemon():
             
         await asyncio.sleep(10) # Polling hyper-fast every 5s for military-grade live tracking
 
-"""
-async def background_alert_daemon():
-    while True:
-        db = SessionLocal()
-        try:
-            active_rules_count = db.query(models.AlertRuleDB).filter(models.AlertRuleDB.is_active == True).count()
-            is_any_stream_active = any(status == "processing" for status in video_processing_status.values())
-
-            # DIAGNOSTIC LOG 1: Start of Cycle
-            print(f"[Daemon DEBUG] Start Cycle - Active Rules: {active_rules_count} | Active Streams: {is_any_stream_active}")
-            if not is_any_stream_active:
-                 print(f"[Daemon DEBUG] No active streams found in: {video_processing_status}")
-
-            if active_rules_count == 0 or not is_any_stream_active:
-                db.close()
-                await asyncio.sleep(10) 
-                continue
-
-            print(f"[Daemon] Waking up to check {active_rules_count} active alert rules against live feed...")
-            active_rules = db.query(models.AlertRuleDB).filter(models.AlertRuleDB.is_active == True).all()
-            
-            for rule_db in active_rules:
-                rule_text = rule_db.condition
-                
-                if ml_engine:
-                    try:
-                        print(f"[Daemon DEBUG] Querying AI for rule: {rule_text}")
-                        result = ml_engine.query(rule_text, is_stream=True)
-                        if result.get("status") != "error":
-                            ai_response = result.get("response", "").lower()
-                            print(f"[Daemon DEBUG] Raw AI Response for '{rule_text}': {ai_response}")
-                            
-                            
-                            confirmation_words = ["yes","confirmed","verified","true"]
-                            if any(f" {word} " in f" {ai_response} " for word in confirmation_words):
-                                print(f"✅ [Daemon DEBUG] MATCH FOUND for rule: {rule_text}")
-                                # now = time.time()
-                                # last_fired = rule_last_triggered.get(rule_db.id, 0)
-                                # if (now - last_fired) < 300: continue
-
-                                new_log = models.TriggeredAlertDB(
-                                    rule_tested=rule_text, ai_analysis=result.get("response", "Match found."),
-                                    timestamp_seconds=result.get("clip_start", 0), video_source_id=result.get("source_id", "unknown")
-                                )
-                                db.add(new_log)
-                                db.commit()
-                                print(f"[Daemon DEBUG] Alert successfully saved to database.")
-                                
-                                send_telegram_alert(
-                                    f"🚨 SECURITY ALERT 🚨\n\nRule: '{rule_text}'\n🔎 AI Notes: {new_log.ai_analysis}",
-                                    result.get("frame_path")
-                                )
-
-                                
-                                await notifier.broadcast({
-                                    "type": "NEW_ALERT", "rule": rule_text,
-                                    "ai_analysis": new_log.ai_analysis,
-                                    "timestamp": new_log.timestamp_seconds, "frame_path": result.get("frame_path")
-                                })
-                                
-                                safe_speech = rule_text.replace('"', '').replace("'", "")
-                                phrase = f"Security Alert! Watch Tower detected {safe_speech} on the camera feed!"
-                                
-                                threading.Thread(target=speak_alarm, args=(phrase,), daemon=True).start()
-                                rule_last_triggered[rule_db.id] = time.time()
-                            else:
-                                print(f"❌ [Daemon DEBUG] AI verified but said NO (or didn't use 'yes'/'match found')")
-                        else:
-                             print(f"⚠️ [Daemon DEBUG] ML Engine returned an error: {result.get('message')}")
-                    except Exception as e:
-                        if "429" in str(e) or "quota" in str(e).lower():
-                            rule_db.is_active = False
-                            db.commit()
-                            print(f"🛑 [Daemon DEBUG] Quota exceeded. Deactivating rule: {rule_text}")
-                        else:
-                             print(f"🛑 [Daemon DEBUG] Exception during ML query: {e}")
-        finally:
-            db.close()
-                
-        # Wait 10 seconds before doing it all again (Reduced for faster demo)
-        await asyncio.sleep(10)
-"""
 
 
 
@@ -765,37 +689,14 @@ def clean_text_for_speech(text: str) -> str:
 
 def speak_alarm(phrase: str):
     """
-    Text-to-speech alarm using high-quality ElevenLabs API.
-    If the API fails (no credit, no internet), instantly falls back to pyttsx3.
+    Text-to-speech alarm using offline pyttsx3.
     Runs in a background thread to prevent UI freezing.
     """
     def _speak():
         try:
-            import os
             # Clean the phrase before speaking
             clean_phrase = clean_text_for_speech(phrase)
             
-            # --- Primary Engine: ElevenLabs ---
-            eleven_key = os.getenv("ELEVENLABS_API_KEY")
-            if eleven_key:
-                try:
-                    from elevenlabs.client import ElevenLabs
-                    from elevenlabs.play import play
-                    
-                    print("🎧 [Voice Engine] Attempting ElevenLabs API...")
-                    client = ElevenLabs(api_key=eleven_key)
-                    audio = client.text_to_speech.convert(
-                        voice_id="CwhRBWXzGAHq8TQ4Fs17", 
-                        text=clean_phrase,
-                        model_id="eleven_multilingual_v2",
-                    )
-                    play(audio)
-                    print("✅ [Voice Engine] ElevenLabs play complete.")
-                    return  # Exit early since ElevenLabs succeeded
-                except Exception as eval_err:
-                    print(f"⚠️ [Voice Engine] ElevenLabs failed ({eval_err}). Falling back to Robot Voice...")
-            
-            # --- Fallback Engine: pyttsx3 ---
             print("🤖 [Voice Engine] Using offline pyttsx3.")
             import pyttsx3
             engine = pyttsx3.init()
