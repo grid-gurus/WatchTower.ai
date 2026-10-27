@@ -253,6 +253,5 @@ API_TESTS.md
 curl_tests.ps1
 curl_tests.sh
 
-temp_redesign/*
-
+/temp_redesign/
 
